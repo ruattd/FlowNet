@@ -18,7 +18,12 @@ partial class Flow
     /// </summary>
     /// <param name="identifier">标识符，若为空则自动由方法名生成</param>
     [AttributeUsage(AttributeTargets.Method)]
-    public sealed class TaskAttribute(string? identifier = null) : Attribute
+    public sealed class TaskAttribute(string? identifier = null) : Attribute;
+
+    /// <summary>
+    /// 为已标记的 Flow 任务配置自动执行。
+    /// </summary>
+    public sealed class RunAttribute : Attribute
     {
         /// <summary>
         /// 标记该任务在指定锚点<b>之前</b>执行，支持通配符和正则表达式

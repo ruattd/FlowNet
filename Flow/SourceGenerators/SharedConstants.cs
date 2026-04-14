@@ -2,10 +2,12 @@ namespace Flow.SourceGenerators;
 
 internal static class SharedConstants
 {
-    public const string FlowNamespace = "Flow.Core";
-
     public const string ExcludeFromCodeCoverage = "[global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]";
 
-    public const string FlowScopeAttribute = $"{FlowNamespace}.ScopeAttribute";
-    public const string FlowTaskAttribute = $"{FlowNamespace}.TaskAttribute";
+    public const string FlowCoreNamespace = "Flow.Core";
+    public const string FlowClass = $"{FlowCoreNamespace}.Flow";
+
+    public const string FlowScopeAttribute = $"{FlowClass}.ScopeAttribute";
+    public const string FlowTaskAttribute = $"{FlowClass}.TaskAttribute";
+    public const string FlowRunAttribute = $"{FlowClass}.RunAttribute";
 }

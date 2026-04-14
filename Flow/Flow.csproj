@@ -9,6 +9,7 @@
         <Configurations>Debug;Release</Configurations>
         <PlatformTarget>AnyCPU</PlatformTarget>
         <Prefer32Bit>false</Prefer32Bit>
+        <NoWarn>CS9113</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>

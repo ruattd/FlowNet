@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -9,18 +10,24 @@ namespace Flow.SourceGenerators;
 [Generator(LanguageNames.CSharp)]
 public class FlowTaskGenerator : IIncrementalGenerator
 {
+    private readonly record struct TaskAutoRunModel(
+        string? Before,
+        string? After
+    );
+
     private readonly record struct TaskModel(
-        IReadOnlyList<string> Scopes,
         string Identifier,
-        string QualifiedMethodName
+        IMethodSymbol Method,
+        IReadOnlyList<string> Scopes,
+        IReadOnlyList<TaskAutoRunModel> AutoRuns
     );
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var tasks = context.SyntaxProvider.ForAttributeWithMetadataName(
             fullyQualifiedMetadataName: SharedConstants.FlowTaskAttribute,
-            predicate: (node, _) => node is MethodDeclarationSyntax,
-            transform: (ctx, _) =>
+            predicate: static (node, _) => node is MethodDeclarationSyntax,
+            transform: static (ctx, _) =>
             {
                 var method = (IMethodSymbol)ctx.TargetSymbol;
                 var containingType = method.ContainingType;
@@ -47,7 +54,16 @@ public class FlowTaskGenerator : IIncrementalGenerator
                     var methodName = method.Name.Trim('_');
                     identifier = (string.IsNullOrEmpty(methodName) ? method.ContainingType.Name : methodName).PascalToSnakeId();
                 }
-                return (method.ContainingType, new TaskModel(scopes, identifier, method.GetQualifiedSymbolName()));
+                // 提取自动执行配置
+                var runAttrs = ctx.Attributes.Where(a =>
+                    a.AttributeClass!.GetFullyQualifiedName() == SharedConstants.FlowRunAttribute);
+                var autoRuns = (
+                    from a in runAttrs
+                    let before = a.NamedArguments.FirstOrDefault(x => x.Key == "Before").Value.Value as string
+                    let after = a.NamedArguments.FirstOrDefault(x => x.Key == "After").Value.Value as string
+                    select new TaskAutoRunModel(before, after)
+                ).ToList();
+                return (method.ContainingType, new TaskModel(identifier, method, scopes, autoRuns));
             })
             .Where(x => x != default)
             .Collect();
@@ -56,7 +72,19 @@ public class FlowTaskGenerator : IIncrementalGenerator
     }
 
     private static void _GenerateTaskInvokePoints(SourceProductionContext spc,
-        ImmutableArray<(INamedTypeSymbol ContainingType, TaskModel Task)> tasks)
+        ImmutableArray<(INamedTypeSymbol ContainingType, TaskModel Task)> items)
     {
+        var groupedTasks = items
+            .GroupBy(x => x.ContainingType, SymbolEqualityComparer.Default)
+            .Where(g => g.Key != null)
+            .Select(g => ((INamedTypeSymbol)g.Key!, g.Select(x => x.Task)));
+
+        foreach (var (type, tasks) in groupedTasks)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Threading.Tasks;");
+            
+        }
     }
 }
