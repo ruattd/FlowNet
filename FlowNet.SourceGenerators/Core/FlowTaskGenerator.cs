@@ -32,7 +32,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
             {
                 var method = (IMethodSymbol)ctx.TargetSymbol;
                 var containingType = method.ContainingType;
-                if (containingType?.IsPartial() != true) return default;
+                if (containingType?.IsPartialClass() != true) return default;
                 // 查找 scope
                 var containingScopes = new Stack<string>();
                 while (containingType != null)
@@ -46,8 +46,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 var scopes = new List<string>();
                 while (containingScopes.Count > 0) scopes.Add(containingScopes.Pop());
                 // 提取 identifier
-                var attr = ctx.Attributes.First(a =>
-                    a.AttributeClass!.GetFullyQualifiedName() == Constants.FlowTaskAttribute);
+                var attr = ctx.Attributes[0];
                 string? identifier = null;
                 if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
                 if (identifier == null)
@@ -80,9 +79,12 @@ public class FlowTaskGenerator : IIncrementalGenerator
             .Where(g => g.Key != null)
             .Select(g => ((INamedTypeSymbol)g.Key!, g.Select(x => x.Task)));
 
+        var collectedTasks = new List<TaskModel>();
+
         foreach (var (type, tasks) in groupedTasks)
         {
             var sb = new StringBuilder();
+            var taskList = new List<(string PascalId, TaskModel Task)>();
 
             // file header
             sb.AppendCommonHeader();
@@ -98,17 +100,69 @@ public class FlowTaskGenerator : IIncrementalGenerator
 
             foreach (var task in tasks)
             {
+                var pascalId = task.Identifier.SnakeIdToPascal();
+                sb.Append(indentStr).Append("    public static IFlowTask ").Append(pascalId)
+                    .Append(" { get; } = new ").Append(pascalId).AppendLine("_FlowTask();");
+                taskList.Add((pascalId, task));
+                collectedTasks.Add(task);
             }
 
             sb.Append(indentStr).AppendLine("}");
 
+            // containing type end
             while (--indent >= 0) sb.Append(new string(' ', indent * 4)).AppendLine("}");
 
             // task implementation
-            // ...
+            foreach (var (id, task) in taskList)
+            {
+                var method = task.Method;
+                sb.AppendLine();
+                sb.Append("file sealed class ").Append(id).AppendLine("_FlowTask : IFlowTask");
+                sb.AppendLine("{");
+                sb.Append("    ").AppendGeneratedCodeAttribute();
+                sb.Append("    ").AppendExcludeFromCodeCoverageAttribute();
+                var isAwaitable = method.IsAwaitable();
+                var hasReturn = !method.ReturnsVoid;
+                sb.AppendLine("    public async Task<TReturn> Invoke<TReturn, TArgument>(TArgument argument)");
+                sb.AppendLine("    {");
+                sb.Append("        if (argument is not ");
+                var param = method.Parameters;
+                if (param.Length == 0) sb.Append("None");
+                else if (param.Length == 1) sb.Append(param[0].Type.GetFullyQualifiedName());
+                else
+                {
+                    sb.Append("(");
+                    sb.Append(param[0].Type.GetFullyQualifiedName());
+                    foreach (var p in param.Skip(1))
+                        sb.Append(", ").Append(p.Type.GetFullyQualifiedName());
+                    sb.Append(")");
+                }
+                sb.AppendLine(" arg)");
+                sb.AppendLine("            throw new InvalidCastException($\"Argument type mismatch.\");");
+                sb.Append("        ");
+                if (hasReturn) sb.Append("var result = ");
+                sb.Append("await ");
+                if (!isAwaitable) sb.Append("Task.Run(() => ");
+                sb.Append(method.GetQualifiedSymbolName()).Append("(");
+                if (param.Length > 0)
+                {
+                    if (param.Length == 1) sb.Append("arg");
+                    else
+                    {
+                        sb.Append("arg.Item1");
+                        for (var i = 2; i <= param.Length; i++) sb.Append(", arg.Item").Append(i);
+                    }
+                }
+                sb.Append(")");
+                if (!isAwaitable) sb.Append(").ConfigureAwait(false)");
+                sb.AppendLine(";");
+                sb.Append("        return ").Append(hasReturn ? "(TReturn)result" : "default!").AppendLine(";");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+            }
 
             // register source
-            spc.AddSource($"{type.GetFullyQualifiedName()}.g.cs", sb.ToString());
+            spc.AddSource($"{type.GetFullyQualifiedName()}+FlowTasks.g.cs", sb.ToString());
         }
     }
 }

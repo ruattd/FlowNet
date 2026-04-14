@@ -21,7 +21,7 @@ internal static class RoslynExtensions
 
     extension(INamedTypeSymbol type)
     {
-        public bool IsPartial()
+        public bool IsPartialClass()
         {
             foreach (var decl in type.DeclaringSyntaxReferences)
             {
