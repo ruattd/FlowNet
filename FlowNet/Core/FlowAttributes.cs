@@ -1,6 +1,6 @@
 using System;
 
-namespace Flow.Core;
+namespace FlowNet.Core;
 
 partial class Flow
 {

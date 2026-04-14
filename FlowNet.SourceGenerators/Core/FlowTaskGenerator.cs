@@ -2,10 +2,11 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using FlowNet.SourceGenerators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Flow.SourceGenerators;
+namespace FlowNet.SourceGenerators.Core;
 
 [Generator(LanguageNames.CSharp)]
 public class FlowTaskGenerator : IIncrementalGenerator
@@ -25,7 +26,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var tasks = context.SyntaxProvider.ForAttributeWithMetadataName(
-            fullyQualifiedMetadataName: SharedConstants.FlowTaskAttribute,
+            fullyQualifiedMetadataName: Constants.FlowTaskAttribute,
             predicate: static (node, _) => node is MethodDeclarationSyntax,
             transform: static (ctx, _) =>
             {
@@ -37,7 +38,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 while (containingType != null)
                 {
                     var scopeAttr = containingType.GetAttributes().FirstOrDefault(a =>
-                        a.AttributeClass?.GetFullyQualifiedName() == SharedConstants.FlowScopeAttribute);
+                        a.AttributeClass?.GetFullyQualifiedName() == Constants.FlowScopeAttribute);
                     if (scopeAttr?.ConstructorArguments[0].Value is not string scopeIdentifier) break;
                     containingScopes.Push(scopeIdentifier);
                     containingType = containingType.ContainingType;
@@ -46,7 +47,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 while (containingScopes.Count > 0) scopes.Add(containingScopes.Pop());
                 // 提取 identifier
                 var attr = ctx.Attributes.First(a =>
-                    a.AttributeClass!.GetFullyQualifiedName() == SharedConstants.FlowTaskAttribute);
+                    a.AttributeClass!.GetFullyQualifiedName() == Constants.FlowTaskAttribute);
                 string? identifier = null;
                 if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
                 if (identifier == null)
@@ -56,7 +57,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 }
                 // 提取自动执行配置
                 var runAttrs = ctx.Attributes.Where(a =>
-                    a.AttributeClass!.GetFullyQualifiedName() == SharedConstants.FlowRunAttribute);
+                    a.AttributeClass!.GetFullyQualifiedName() == Constants.FlowRunAttribute);
                 var autoRuns = (
                     from a in runAttrs
                     let before = a.NamedArguments.FirstOrDefault(x => x.Key == "Before").Value.Value as string
@@ -82,9 +83,32 @@ public class FlowTaskGenerator : IIncrementalGenerator
         foreach (var (type, tasks) in groupedTasks)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("using System;");
-            sb.AppendLine("using System.Threading.Tasks;");
-            
+
+            // file header
+            sb.AppendCommonHeader();
+            sb.AppendLine();
+
+            // containing type
+            sb.AppendTypeHeader(out var indent, type);
+            var indentStr = new string(' ', indent * 4);
+
+            // invoking methods implementation
+            sb.Append(indentStr).AppendLine("public static class FlowTasks");
+            sb.Append(indentStr).AppendLine("{");
+
+            foreach (var task in tasks)
+            {
+            }
+
+            sb.Append(indentStr).AppendLine("}");
+
+            while (--indent >= 0) sb.Append(new string(' ', indent * 4)).AppendLine("}");
+
+            // task implementation
+            // ...
+
+            // register source
+            spc.AddSource(type.GetFullyQualifiedName(), sb.ToString());
         }
     }
 }

@@ -5,9 +5,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Flow.SourceGenerators;
+namespace FlowNet.SourceGenerators.Shared;
 
-internal static class SharedExtensions
+internal static class RoslynExtensions
 {
     public static string ToLiteral(this string str) => SymbolDisplay.FormatLiteral(str, true);
 

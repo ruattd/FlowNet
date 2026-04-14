@@ -1,10 +1,5 @@
 <Solution>
-  <Configurations>
-    <BuildType Name="Debug" />
-    <BuildType Name="Release" />
-    <Platform Name="AnyCPU" />
-    <Platform Name="ARM64" />
-    <Platform Name="x64" />
-  </Configurations>
-  <Project Path="Flow/Flow.csproj" />
+  <Project Path="FlowNet\FlowNet.csproj" />
+  <Project Path="FlowNet.SourceGenerators/FlowNet.SourceGenerators.csproj" />
+  <Project Path="FlowNet.Test\FlowNet.Test.csproj" />
 </Solution>

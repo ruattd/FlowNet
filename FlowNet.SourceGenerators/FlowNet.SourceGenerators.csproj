@@ -5,11 +5,8 @@
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-        <Platforms>AnyCPU;x64;ARM64</Platforms>
-        <Configurations>Debug;Release</Configurations>
-        <PlatformTarget>AnyCPU</PlatformTarget>
         <Prefer32Bit>false</Prefer32Bit>
-        <NoWarn>CS9113</NoWarn>
+        <IncludeBuildOutput>false</IncludeBuildOutput>
     </PropertyGroup>
 
     <ItemGroup>

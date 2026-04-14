@@ -1,6 +1,6 @@
-namespace Flow.SourceGenerators;
+namespace FlowNet.SourceGenerators.Shared;
 
-internal static class SharedConstants
+internal static class Constants
 {
     public const string ExcludeFromCodeCoverage = "[global::System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]";
 

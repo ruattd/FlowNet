@@ -1,8 +1,4 @@
-namespace Flow.Core;
-
-partial class Flow
-{
-}
+namespace FlowNet.Core;
 
 [Flow.Scope("app-life")]
 public sealed partial class AppLife
