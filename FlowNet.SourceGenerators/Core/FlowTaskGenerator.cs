@@ -56,8 +56,8 @@ public class FlowTaskGenerator : IIncrementalGenerator
                     identifier = (string.IsNullOrEmpty(methodName) ? method.ContainingType.Name : methodName).PascalToSnakeId();
                 }
                 // 提取自动执行配置
-                var runAttrs = ctx.Attributes.Where(a =>
-                    a.AttributeClass!.GetFullyQualifiedName() == Constants.FlowRunAttribute);
+                var runAttrs = method.GetAttributes().Where(a =>
+                    a.AttributeClass?.GetFullyQualifiedName() == Constants.FlowRunAttribute);
                 var autoRuns = (
                     from a in runAttrs
                     let before = a.NamedArguments.FirstOrDefault(x => x.Key == "Before").Value.Value as string
@@ -108,7 +108,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
             // ...
 
             // register source
-            spc.AddSource(type.GetFullyQualifiedName(), sb.ToString());
+            spc.AddSource($"{type.GetFullyQualifiedName()}.g.cs", sb.ToString());
         }
     }
 }

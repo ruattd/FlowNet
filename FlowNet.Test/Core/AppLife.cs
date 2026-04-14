@@ -1,7 +1,9 @@
-namespace FlowNet.Core;
+using FlowNet.Core;
+
+namespace FlowNet.Test.Core;
 
 [Flow.Scope("app-life")]
-public sealed partial class AppLife
+public static partial class AppLife
 {
     [Flow.Task]
     [Flow.Run(Before = "app:*")]
