@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.CodeAnalysis;
 
-namespace FlowNet.SourceGenerators.Shared;
+namespace FlowNet.CodeAnalysis.Shared;
 
 internal static class CommonCodeExtensions
 {

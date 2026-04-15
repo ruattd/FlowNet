@@ -1,8 +1,8 @@
 ﻿using System.Text;
-using FlowNet.SourceGenerators.Shared;
+using FlowNet.CodeAnalysis.Shared;
 using Microsoft.CodeAnalysis;
 
-namespace FlowNet.SourceGenerators.Core;
+namespace FlowNet.CodeAnalysis.SourceGenerators;
 
 [Generator(LanguageNames.CSharp)]
 public class FlowInteropGenerator : IIncrementalGenerator

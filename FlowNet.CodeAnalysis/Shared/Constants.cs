@@ -1,4 +1,4 @@
-namespace FlowNet.SourceGenerators.Shared;
+namespace FlowNet.CodeAnalysis.Shared;
 
 internal static class Constants
 {

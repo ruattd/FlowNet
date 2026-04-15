@@ -2,11 +2,11 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
-using FlowNet.SourceGenerators.Shared;
+using FlowNet.CodeAnalysis.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace FlowNet.SourceGenerators.Core;
+namespace FlowNet.CodeAnalysis.SourceGenerators;
 
 [Generator(LanguageNames.CSharp)]
 public class FlowTaskGenerator : IIncrementalGenerator
