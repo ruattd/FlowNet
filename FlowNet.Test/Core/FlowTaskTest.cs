@@ -9,6 +9,6 @@ public class FlowTaskTest
     [TestMethod]
     public async Task TaskInvoke()
     {
-        await Flow.InvokeTask("app:start");
+        await FlowInterops.Initialize("app:test");
     }
 }

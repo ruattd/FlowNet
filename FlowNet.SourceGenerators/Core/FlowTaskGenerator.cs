@@ -110,7 +110,9 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 sb.Append(indentStr).Append("        ").AppendGeneratedCodeAttribute();
                 sb.Append(indentStr).Append("        ").AppendExcludeFromCodeCoverageAttribute();
                 var isAwaitable = method.IsAwaitable();
-                var hasReturn = !method.ReturnsVoid;
+                var hasReturn = isAwaitable
+                    ? method.ReturnType is INamedTypeSymbol { TypeArguments.Length: > 0 }
+                    : !method.ReturnsVoid;
                 sb.Append(indentStr).AppendLine("        public async Task<TReturn> Invoke<TReturn, TArgument>(TArgument argument)");
                 sb.Append(indentStr).AppendLine("        {");
                 sb.Append(indentStr).Append("            if (argument is not ");

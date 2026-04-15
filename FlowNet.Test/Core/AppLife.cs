@@ -1,29 +1,22 @@
+using System;
+using System.Threading.Tasks;
 using FlowNet.Core;
 
 namespace FlowNet.Test.Core;
 
-[Flow.Scope("app-life")]
+[Flow.Scope("app")]
 public static partial class AppLife
 {
-    [Flow.Scope("events")]
-    public sealed partial class Events
-    {
-        [Flow.Task]
-        public static void Tap()
-        {
-        }
-    }
-
     [Flow.Task]
-    [Flow.Run(Before = "app:*")]
-    public static int Start(Events e, Events e1)
+    public static int Start()
     {
         return 0;
     }
 
     [Flow.Task]
-    private static void _Test()
+    private static async Task _Test()
     {
-        Flow.InvokeTask<int>("app:start");
+        var r = await Flow.InvokeTask<int>("app:start");
+        Console.WriteLine($"Output: {r}");
     }
 }
