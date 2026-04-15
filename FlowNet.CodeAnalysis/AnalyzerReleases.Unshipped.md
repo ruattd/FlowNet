@@ -3,6 +3,6 @@
 
 ### New Rules
 
-Rule ID | Category | Severity | Notes                       
---------|----------|----------|--------
-FLOW001 | Usage    | Warning  | FlowInternalWarningAnalyzer 
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+FLOW001 | Usage | Warning | FlowInternalWarningAnalyzer
