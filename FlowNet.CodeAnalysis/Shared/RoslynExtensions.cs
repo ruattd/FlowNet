@@ -228,6 +228,21 @@ internal static class RoslynExtensions
         }
     }
 
+    extension(IMethodSymbol method)
+    {
+        public bool HasGeneratedCodeAttribute()
+        {
+            foreach (var attribute in method.GetAttributes())
+            {
+                var attributeClass = attribute.AttributeClass;
+                var metadataName = attributeClass?.ToDisplayString();
+                if (metadataName is "System.CodeDom.Compiler.GeneratedCodeAttribute" or "System.Runtime.CompilerServices.CompilerGeneratedAttribute")
+                    return true;
+            }
+            return false;
+        }
+    }
+
     public static string GetQualifiedPropertyAccess(this IPropertySymbol prop)
     {
         var owner = prop.ContainingType.GetFullyQualifiedName();
