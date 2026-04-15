@@ -14,7 +14,8 @@ partial class Flow
     /// <summary>
     /// 标记一个 <see langword="partial"/> 类中的 <see langword="static"/> 方法为 Flow
     /// 任务，将自动生成相关调用代码。<br/>
-    /// 若该方法位于 Flow 作用域内，该任务将自动加入该作用域。
+    /// 若该方法位于 Flow 作用域内，该任务将自动加入该作用域。<br/>
+    /// <b>NOTE</b>: 由于语言特性的限制，最多支持 7 个参数的方法，若有更多则会导致生成的代码无法编译或运行时行为不正确。
     /// </summary>
     /// <param name="identifier">标识符，若为空则自动由方法名生成</param>
     [AttributeUsage(AttributeTargets.Method)]
