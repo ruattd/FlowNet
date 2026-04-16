@@ -5,10 +5,10 @@ namespace FlowNet.Core;
 partial class Flow
 {
     /// <summary>
-    /// 标记一个 <see langword="partial"/> 类为 Flow 作用域，将自动生成作用域上下文及相关代码。
+    /// 标记一个 <see langword="partial"/> 类/接口为 Flow 作用域，将自动生成作用域上下文及相关代码。
     /// </summary>
     /// <param name="identifier">标识符</param>
-    [AttributeUsage(AttributeTargets.Class)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface)]
     public sealed class ScopeAttribute(string identifier) : Attribute;
 
     /// <summary>

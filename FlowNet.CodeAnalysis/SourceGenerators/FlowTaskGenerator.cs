@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace FlowNet.CodeAnalysis.SourceGenerators;
 
-[Generator(LanguageNames.CSharp)]
+[Generator]
 public class FlowTaskGenerator : IIncrementalGenerator
 {
     private readonly record struct TaskAutoRunModel(
@@ -20,8 +20,10 @@ public class FlowTaskGenerator : IIncrementalGenerator
         string Identifier,
         IMethodSymbol Method,
         IReadOnlyList<string> Scopes,
-        IReadOnlyList<TaskAutoRunModel> AutoRuns
-    );
+        IReadOnlyList<TaskAutoRunModel> AutoRuns)
+    {
+        public string GlobalIdentifier { get; } = string.Join(":", Scopes.Append(Identifier));
+    }
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -31,20 +33,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
             transform: static (ctx, _) =>
             {
                 var method = (IMethodSymbol)ctx.TargetSymbol;
-                var containingType = method.ContainingType;
-                if (containingType?.IsPartialClass() != true) return default;
-                // 查找 scope
-                var containingScopes = new Stack<string>();
-                while (containingType != null)
-                {
-                    var scopeAttr = containingType.GetAttributes().FirstOrDefault(a =>
-                        a.AttributeClass?.GetFullyQualifiedName() == Constants.FlowScopeAttribute);
-                    if (scopeAttr?.ConstructorArguments[0].Value is not string scopeIdentifier) break;
-                    containingScopes.Push(scopeIdentifier);
-                    containingType = containingType.ContainingType;
-                }
-                var scopes = new List<string>();
-                while (containingScopes.Count > 0) scopes.Add(containingScopes.Pop());
+                var scopes = method.GetContainingScopes();
                 // 提取 identifier
                 var attr = ctx.Attributes[0];
                 string? identifier = null;
@@ -63,7 +52,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                     let after = a.NamedArguments.FirstOrDefault(x => x.Key == "After").Value.Value as string
                     select new TaskAutoRunModel(before, after)
                 ).ToList();
-                return (method.ContainingType, new TaskModel(identifier, method, scopes, autoRuns));
+                return new TaskModel(identifier, method, scopes, autoRuns);
             })
             .Where(x => x != default)
             .Collect();
@@ -72,12 +61,12 @@ public class FlowTaskGenerator : IIncrementalGenerator
     }
 
     private static void _GenerateTaskInvokePoints(SourceProductionContext spc,
-        ImmutableArray<(INamedTypeSymbol ContainingType, TaskModel Task)> items)
+        ImmutableArray<TaskModel> items)
     {
         var groupedTasks = items
-            .GroupBy(x => x.ContainingType, SymbolEqualityComparer.Default)
+            .GroupBy(x => x.Method.ContainingType, SymbolEqualityComparer.Default)
             .Where(g => g.Key != null)
-            .Select(g => ((INamedTypeSymbol)g.Key!, g.Select(x => x.Task)));
+            .Select(g => ((INamedTypeSymbol)g.Key!, g.Select(x => x)));
 
         var collectedTasks = new List<TaskModel>();
 
@@ -160,7 +149,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 sb.AppendLine();
             }
 
-            sb.Remove(sb.Length - 2, 2);
+            sb.Remove(sb.Length - 1, 1);
             sb.Append(indentStr).AppendLine("}");
 
             // containing type end
@@ -188,10 +177,13 @@ public class FlowTaskGenerator : IIncrementalGenerator
 
             foreach (var task in collectedTasks)
             {
-                sb.Append("        Flow.Internal.RegisterTask(\"");
-                foreach (var scope in task.Scopes) sb.Append(scope).Append(':');
-                sb.Append(task.Identifier).Append("\", ").Append(task.Method.ContainingType.GetFullyQualifiedName())
-                    .Append(".FlowTasks.").Append(task.Method.Name).AppendLine(");");
+                sb.Append("        Flow.Internal.RegisterTask(\"")
+                  .Append(task.GlobalIdentifier)
+                  .Append("\", ")
+                  .Append(task.Method.ContainingType.GetFullyQualifiedName())
+                  .Append(".FlowTasks.")
+                  .Append(task.Method.Name)
+                  .AppendLine(");");
             }
 
             // tail

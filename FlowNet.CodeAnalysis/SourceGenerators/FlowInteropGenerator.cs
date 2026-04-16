@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 
 namespace FlowNet.CodeAnalysis.SourceGenerators;
 
-[Generator(LanguageNames.CSharp)]
+[Generator]
 public class FlowInteropGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
