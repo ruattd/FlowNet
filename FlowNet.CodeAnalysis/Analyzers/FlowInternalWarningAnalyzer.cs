@@ -9,18 +9,7 @@ namespace FlowNet.CodeAnalysis.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class FlowInternalWarningAnalyzer : DiagnosticAnalyzer
 {
-    public const string DiagnosticId = "FLOW001";
-
-    private static readonly DiagnosticDescriptor Rule = new(
-        id: DiagnosticId,
-        title: "Avoid calling Flow.Internal members",
-        messageFormat: "Flow.Internal is intended for internal Flow.NET infrastructure and should not be called directly, use source generation and/or other public features instead",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true
-    );
-
-    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [Rule];
+    public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [AnalyzerRules.AvoidCallingFlowInternalMembers];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -47,6 +36,6 @@ public class FlowInternalWarningAnalyzer : DiagnosticAnalyzer
         if (context.Operation is not IInvocationOperation invocation) return;
         var targetMethod = invocation.TargetMethod.OriginalDefinition;
         if (!internalMethods.Contains(targetMethod)) return;
-        context.ReportDiagnostic(Diagnostic.Create(Rule, invocation.Syntax.GetLocation()));
+        context.ReportDiagnostic(Diagnostic.Create(AnalyzerRules.AvoidCallingFlowInternalMembers, invocation.Syntax.GetLocation()));
     }
 }
