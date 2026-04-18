@@ -17,7 +17,7 @@ partial class Flow
     /// 若该方法位于 Flow 作用域内，该任务将自动加入该作用域。<br/>
     /// <b>NOTE</b>: 由于语言特性的限制，最多支持 7 个参数的方法，若有更多则会导致生成的代码无法编译或运行时行为不正确。
     /// </summary>
-    /// <param name="identifier">标识符，若为空则自动由方法名生成</param>
+    /// <param name="identifier">标识符，若为空则自动由方法名生成，生成时将忽略单下划线前缀</param>
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class TaskAttribute(string? identifier = null) : Attribute;
 

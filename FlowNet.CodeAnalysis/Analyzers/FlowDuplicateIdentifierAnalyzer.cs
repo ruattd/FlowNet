@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using FlowNet.CodeAnalysis.Shared;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace FlowNet.CodeAnalysis.Analyzers;
@@ -60,7 +61,9 @@ public class FlowDuplicateIdentifierAnalyzer : DiagnosticAnalyzer
 
         void Report(SymbolAnalysisContext ctx, string id, AttributeData attr)
         {
-            var loc = attr.ApplicationSyntaxReference?.GetSyntax(ctx.CancellationToken).GetLocation();
+            var attrSyntax = attr.ApplicationSyntaxReference?.GetSyntax(ctx.CancellationToken) as AttributeSyntax;
+            var loc = attrSyntax?.ArgumentList?.Arguments
+                .FirstOrDefault()?.Expression.GetLocation() ?? attrSyntax?.GetLocation();
             if (loc is null) return;
             ctx.ReportDiagnostic(Diagnostic.Create(AnalyzerRules.DuplicateIdentifier, loc, id));
         }
