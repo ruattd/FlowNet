@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/reusable.yml
     with:
       config: Release
       version: ${{ github.event.release.tag_name }}
