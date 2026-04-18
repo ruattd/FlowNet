@@ -1,11 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using FlowNet.CodeAnalysis.Shared;
 using Microsoft.CodeAnalysis;
 
-namespace FlowNet.CodeAnalysis.SourceGenerators;
+namespace FlowNet.CodeAnalysis.Shared;
 
-internal static class SharedExtensions
+internal static class FlowSharedExtensions
 {
     extension(ISymbol symbol)
     {

@@ -16,9 +16,10 @@ internal static class AnalyzerRules
     public static readonly DiagnosticDescriptor DuplicateIdentifier = new(
         id: "FLOW002",
         title: "Duplicate identifier",
-        messageFormat: "Identifier '{0}' is duplicated",
+        messageFormat: "Global identifier duplicated: '{0}'",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true
+        isEnabledByDefault: true,
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]
     );
 }

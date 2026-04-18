@@ -14,6 +14,12 @@ public static partial class AppLife
     }
 
     [Flow.Task]
+    public static int Start1(int i)
+    {
+        return i;
+    }
+
+    [Flow.Task]
     private static async Task _Test()
     {
         var r = await Flow.InvokeTask<int, int>("app:start", 123);
