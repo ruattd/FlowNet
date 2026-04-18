@@ -7,4 +7,15 @@
         <NoWarn>CS9113</NoWarn>
     </PropertyGroup>
 
+    <PropertyGroup>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>FlowNet</PackageId>
+        <Version>0.0.0</Version>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="..\FlowNet.CodeAnalysis\bin\$(Configuration)\netstandard2.0\FlowNet.CodeAnalysis.dll"
+              Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+
 </Project>
