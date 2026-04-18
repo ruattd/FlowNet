@@ -4,14 +4,20 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <NoWarn>CS9113</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <PackageId>FlowNet</PackageId>
+        <PackageId>FlowNet.Core</PackageId>
+        <Title>Flow.NET</Title>
         <Version>0.0.0</Version>
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageTags>FlowNet;Flow;Flow.NET;Lifecycle;.NET;Standard;Core</PackageTags>
+        <Authors>ruattd and other contributors</Authors>
+        <Description>A lightweight lifecycle and flow control framework for modern .NET applications.</Description>
+        <RepositoryUrl>https://github.com/ruattd/FlowNet</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
