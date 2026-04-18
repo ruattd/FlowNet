@@ -10,7 +10,7 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace FlowNet.CodeAnalysis.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public class FlowDuplicateIdentifierAnalyzer : DiagnosticAnalyzer
+public class DuplicateIdentifierAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [AnalyzerRules.DuplicateIdentifier];
 

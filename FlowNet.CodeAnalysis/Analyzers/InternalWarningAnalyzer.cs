@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace FlowNet.CodeAnalysis.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public class FlowInternalWarningAnalyzer : DiagnosticAnalyzer
+public class InternalWarningAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => [AnalyzerRules.AvoidCallingFlowInternalMembers];
 
