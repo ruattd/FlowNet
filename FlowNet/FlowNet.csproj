@@ -11,11 +11,13 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>FlowNet</PackageId>
         <Version>0.0.0</Version>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
 
     <ItemGroup>
         <None Include="..\FlowNet.CodeAnalysis\bin\$(Configuration)\netstandard2.0\FlowNet.CodeAnalysis.dll"
-              Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+              Pack="true" PackagePath="/analyzers/dotnet/cs" Visible="false" />
+        <None Include="..\README.md" Pack="true" PackagePath="/"/>
     </ItemGroup>
 
 </Project>
