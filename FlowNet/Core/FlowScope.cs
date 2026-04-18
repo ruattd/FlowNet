@@ -5,19 +5,22 @@ namespace FlowNet.Core;
 
 partial class Flow
 {
-    public sealed class ScopeContext
+    public class ScopeContext
     {
-        private ScopeContext() {}
-
         private static readonly HashSet<string> _CreatedIdentifiers = [];
 
-        public static ScopeContext Create(string identifier)
-        {
-            return !_CreatedIdentifiers.Add(identifier)
-                ? throw new InvalidOperationException($"Identifier '{identifier}' already exists")
-                : new ScopeContext { Identifier = identifier };
-        }
+        public string Identifier { get; }
 
-        public required string Identifier { get; init; }
+        internal ScopeContext(string globalIdentifier)
+        {
+            if (!_CreatedIdentifiers.Add(globalIdentifier)) 
+                throw new InvalidOperationException($"Global identifier '{globalIdentifier}' already exists");
+            Identifier = globalIdentifier;
+        }
+    }
+
+    partial class Internal
+    {
+        public static ScopeContext CreateScope(string identifier) => new(identifier);
     }
 }

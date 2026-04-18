@@ -30,6 +30,7 @@ public class FlowInteropGenerator : IIncrementalGenerator
         sb.AppendLine("    public static async Task Initialize(string? startPoint = null)");
         sb.AppendLine("    {");
         sb.AppendLine("        await RegisterFlowTasks().ConfigureAwait(false);");
+        sb.AppendLine("        await InitializeExtensions().ConfigureAwait(false);");
         sb.AppendLine("        if (startPoint != null) await Flow.InvokeTask(startPoint);");
         sb.AppendLine("    }");
 

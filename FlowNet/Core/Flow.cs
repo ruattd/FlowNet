@@ -10,5 +10,5 @@ public static partial class Flow
     /// </summary>
     public static partial class Internal;
 
-    private static readonly ScopeContext Context = ScopeContext.Create("flow");
+    private static readonly ScopeContext Context = Internal.CreateScope("flow");
 }
