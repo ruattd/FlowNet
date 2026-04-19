@@ -29,15 +29,29 @@ partial class Flow
     public sealed class RunAttribute : Attribute
     {
         /// <summary>
-        /// 标记该任务在指定锚点<b>之前</b>执行，支持通配符和正则表达式
+        /// 标记该任务在指定锚点<b>之前</b>执行，支持通配符和正则表达式<br/>
+        /// <b>NOTE</b>: 若任务仅声明了该锚点，同时未被其他任务的 <see cref="After"/> 锚点命中，自动执行将不会触发
         /// </summary>
         public string? Before { get; init; }
 
         /// <summary>
-        /// 标记该任务在指定锚点<b>之后</b>执行，支持通配符和正则表达式
+        /// 标记该任务在指定锚点<b>之后</b>执行，支持通配符和正则表达式<br/>
+        /// <b>NOTE</b>: 被该锚点命中的任务即使未配置自动执行，也会触发自动执行
         /// </summary>
         public string? After { get; init; }
+
+        /// <summary>
+        /// 指定任务的执行优先级，在 <see cref="Before"/> 与 <see cref="After"/> 无法确定层级时会根据该优先级决定执行顺序<br/>
+        /// <b>NOTE</b>: 由于同级任务会尽可能采用异步执行方式，该优先级在大多数时候发挥不了什么作用
+        /// </summary>
+        public int Priority { get; init; } = 0;
     }
+
+    /// <summary>
+    /// 将 Flow 任务的方法参数标记为调用信息参数，该参数必须位于第一项且为 <see cref="FlowTaskInvokingInfo"/> 类型。
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public sealed class InvokingInfoAttribute : Attribute;
 }
 
 /// <summary>

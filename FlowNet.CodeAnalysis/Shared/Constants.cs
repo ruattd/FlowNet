@@ -19,6 +19,10 @@ internal static class Constants
     public const string FlowRunAttribute = $"{FlowClass}.{FlowRunClassName}";
     public const string FlowRunAttributeMetadataName = $"{FlowClass}+{FlowRunClassName}";
 
+    private const string FlowInvokingInfoClassName = "InvokingInfoAttribute";
+    public const string FlowInvokingInfoAttribute = $"{FlowClass}.{FlowInvokingInfoClassName}";
+    public const string FlowInvokingInfoAttributeMetadataName = $"{FlowClass}+{FlowInvokingInfoClassName}";
+
     private const string FlowExtensionUsageClassName = "FlowExtensionUsageAttribute";
     public const string FlowExtensionUsageAttribute = $"{FlowCoreNamespace}.{FlowExtensionUsageClassName}";
 }

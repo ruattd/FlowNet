@@ -13,7 +13,8 @@ public class FlowTaskGenerator : IIncrementalGenerator
 {
     private readonly record struct TaskAutoRunModel(
         string? Before,
-        string? After
+        string? After,
+        int Priority
     );
 
     private readonly record struct TaskModel(
@@ -50,7 +51,8 @@ public class FlowTaskGenerator : IIncrementalGenerator
                     from a in runAttrs
                     let before = a.NamedArguments.FirstOrDefault(x => x.Key == "Before").Value.Value as string
                     let after = a.NamedArguments.FirstOrDefault(x => x.Key == "After").Value.Value as string
-                    select new TaskAutoRunModel(before, after)
+                    let priority = a.NamedArguments.FirstOrDefault(x => x.Key == "Priority").Value.Value is int p ? p : 0
+                    select new TaskAutoRunModel(before, after, priority)
                 ).ToList();
                 return new TaskModel(identifier, method, scopes, autoRuns);
             })
@@ -102,10 +104,18 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 var hasReturn = isAwaitable
                     ? method.ReturnType is INamedTypeSymbol { TypeArguments.Length: > 0 }
                     : !method.ReturnsVoid;
-                sb.Append(indentStr).AppendLine("        public async Task<TReturn> Invoke<TReturn, TArgument>(TArgument argument)");
+                var param = method.Parameters;
+                var hasInvokingInfo = false;
+                if (param.Length > 0 && param[0].GetAttributes().Any(a =>
+                        a.AttributeClass?.GetSimplifiedTypeName() == Constants.FlowInvokingInfoAttribute))
+                {
+                    hasInvokingInfo = true;
+                    param = param.Length > 1 ? param.Slice(1, param.Length - 1) : [];
+                }
+                sb.Append(indentStr).Append("        public async Task<TReturn> Invoke<TReturn, TArgument>" +
+                    "(TArgument argument, FlowTaskInvokingInfo ").Append(hasInvokingInfo ? "invokingInfo)" : "_)");
                 sb.Append(indentStr).AppendLine("        {");
                 sb.Append(indentStr).Append("            if (argument is not ");
-                var param = method.Parameters;
                 if (param.Length == 0) sb.AppendLine("None)");
                 else
                 {
@@ -126,8 +136,10 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 sb.Append("await ");
                 if (!isAwaitable) sb.Append("Task.Run(() => ");
                 sb.Append(method.GetQualifiedSymbolName()).Append("(");
+                if (hasInvokingInfo) sb.Append("invokingInfo");
                 if (param.Length > 0)
                 {
+                    if (hasInvokingInfo) sb.Append(", ");
                     if (param.Length == 1) sb.Append("arg");
                     else
                     {
@@ -182,8 +194,16 @@ public class FlowTaskGenerator : IIncrementalGenerator
                   .Append("\", ")
                   .Append(task.Method.ContainingType.GetFullyQualifiedName())
                   .Append(".FlowTasks.")
-                  .Append(task.Method.Name)
-                  .AppendLine(");");
+                  .Append(task.Method.Name);
+                foreach (var run in task.AutoRuns)
+                {
+                    sb.AppendLine(",");
+                    sb.Append("            (")
+                      .Append(run.Before.ToPrimitive()).Append(", ")
+                      .Append(run.After.ToPrimitive()).Append(", ")
+                      .Append(run.Priority).Append(')');
+                }
+                sb.AppendLine(");");
             }
 
             // tail
