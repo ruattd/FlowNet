@@ -51,7 +51,7 @@ public class FlowScopeGenerator : IIncrementalGenerator
             var indentStr = new string(' ', indent * 4);
 
             // member implementations
-            sb.Append(indentStr).Append("private static Flow.ScopeContext Context = Flow.ScopeContext.Create(\"")
+            sb.Append(indentStr).Append("private static Flow.ScopeContext Context = Flow.Internal.CreateScope(\"")
                 .Append(scope.GlobalIdentifier).AppendLine("\");");
 
             // type end
