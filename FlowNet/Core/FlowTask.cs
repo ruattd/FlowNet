@@ -92,7 +92,7 @@ public interface IFlowTask
 /// <param name="Callers">相关调用者，不存在时为空列表，不包含 <paramref name="DirectCaller"/></param>
 public readonly record struct FlowTaskInvokingInfo(
     string? DirectCaller,
-    IReadOnlyList<string> Callers)
+    IReadOnlyCollection<string> Callers)
 {
     public static readonly FlowTaskInvokingInfo Default = new(null, []);
 }
