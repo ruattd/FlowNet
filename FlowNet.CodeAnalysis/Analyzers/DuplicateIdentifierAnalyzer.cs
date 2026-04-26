@@ -34,27 +34,29 @@ public class DuplicateIdentifierAnalyzer : DiagnosticAnalyzer
         context.RegisterSymbolAction(ctx =>
         {
             var symbol = ctx.Symbol;
-            // match attribute
-            var attr = symbol.GetAttributes().FirstOrDefault(a =>
+            // match attributes
+            var attrs = symbol.GetAttributes().Where(a =>
                 a.AttributeClass?.GetSimplifiedTypeName() == targetAttr);
-            if (attr is null) return;
-            // generate global identifier
-            var identifier = attr.ConstructorArguments[0].Value?.ToString();
-            if (identifier == null)
+            foreach (var attr in attrs)
             {
-                if (!enableAutoInferredIdentifier) return;
-                identifier = (symbol.Name.StartsWith("_") ? symbol.Name.Substring(1) : symbol.Name).PascalToSnakeId();
+                // generate global identifier
+                var identifier = attr.ConstructorArguments[0].Value?.ToString();
+                if (identifier == null)
+                {
+                    if (!enableAutoInferredIdentifier) return;
+                    identifier = (symbol.Name.StartsWith("_") ? symbol.Name.Substring(1) : symbol.Name).PascalToSnakeId();
+                }
+                var containingScopes = symbol.GetContainingScopes();
+                var id = string.Join(":", containingScopes.Append(identifier));
+                // report
+                var result = distinct.AddOrUpdate(id, attr, (_, a) =>
+                {
+                    Report(ctx, id, attr);
+                    if (a != null) Report(distinctCtx[id], id, a);
+                    return null;
+                });
+                if (result != null) distinctCtx[id] = ctx;
             }
-            var containingScopes = symbol.GetContainingScopes();
-            var id = string.Join(":", containingScopes.Append(identifier));
-            // report
-            var result = distinct.AddOrUpdate(id, attr, (_, a) =>
-            {
-                Report(ctx, id, attr);
-                if (a != null) Report(distinctCtx[id], id, a);
-                return null;
-            });
-            if (result != null) distinctCtx[id] = ctx;
         }, symbolKind);
 
         return;

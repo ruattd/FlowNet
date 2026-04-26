@@ -25,6 +25,8 @@ public class FlowInteropGenerator : IIncrementalGenerator
         sb.AppendLine("{");
 
         // initialize method
+        sb.AppendLine("    /// <summary>Initialize Flow.NET framework and start from specified identifier.</summary>");
+        sb.AppendLine("    /// <param cref=\"startPoint\">Global identifier of start point</param>");
         sb.Append("    ").AppendGeneratedCodeAttribute();
         sb.Append("    ").AppendExcludeFromCodeCoverageAttribute();
         sb.AppendLine("    public static async Task Initialize(string? startPoint = null)");
@@ -33,6 +35,12 @@ public class FlowInteropGenerator : IIncrementalGenerator
         sb.AppendLine("        await InitializeExtensions().ConfigureAwait(false);");
         sb.AppendLine("        if (startPoint != null) await Flow.InvokeTask(startPoint);");
         sb.AppendLine("    }");
+
+        // flow:run alias
+        sb.AppendLine("    /// <summary>Initialize Flow.NET framework and run flow control.</summary>");
+        sb.Append("    ").AppendGeneratedCodeAttribute();
+        sb.Append("    ").AppendExcludeFromCodeCoverageAttribute();
+        sb.AppendLine("    public static Task Run() => Initialize(\"flow:run\");");
 
         // tail
         sb.AppendLine("}");
