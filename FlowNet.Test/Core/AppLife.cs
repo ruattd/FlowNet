@@ -20,6 +20,7 @@ public static partial class AppLife
     }
 
     [Flow.Task]
+    [Flow.Task("test1")]
     [Flow.Run(Before = "app:start1")]
     [Flow.Run(After = "app:run")]
     private static async Task _Test()

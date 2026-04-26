@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -18,12 +19,12 @@ public class FlowTaskGenerator : IIncrementalGenerator
     );
 
     private readonly record struct TaskModel(
-        string Identifier,
+        IReadOnlyList<string> Identifiers,
         IMethodSymbol Method,
         IReadOnlyList<string> Scopes,
         IReadOnlyList<TaskAutoRunModel> AutoRuns)
     {
-        public string GlobalIdentifier { get; } = string.Join(":", Scopes.Append(Identifier));
+        public IEnumerable<string> GlobalIdentifiers { get; } = Identifiers.Select(id => string.Join(":", Scopes.Append(id)));
     }
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -36,14 +37,16 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 var method = (IMethodSymbol)ctx.TargetSymbol;
                 var scopes = method.GetContainingScopes();
                 // 提取 identifier
-                var attr = ctx.Attributes[0];
-                string? identifier = null;
-                if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
-                if (identifier == null)
-                {
-                    var methodName = method.Name.Trim('_');
-                    identifier = (string.IsNullOrEmpty(methodName) ? method.ContainingType.Name : methodName).PascalToSnakeId();
-                }
+                var identifiers = ctx.Attributes.Select(attr => {
+                    string? identifier = null;
+                    if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
+                    if (identifier == null)
+                    {
+                        var methodName = method.Name.Trim('_');
+                        identifier = (string.IsNullOrEmpty(methodName) ? method.ContainingType.Name : methodName).PascalToSnakeId();
+                    }
+                    return identifier;
+                }).Distinct(StringComparer.InvariantCulture).ToList();
                 // 提取自动执行配置
                 var runAttrs = method.GetAttributes().Where(a =>
                     a.AttributeClass?.GetFullyQualifiedName() == Constants.FlowRunAttribute);
@@ -54,7 +57,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                     let priority = a.NamedArguments.FirstOrDefault(x => x.Key == "Priority").Value.Value is int p ? p : 0
                     select new TaskAutoRunModel(before, after, priority)
                 ).ToList();
-                return new TaskModel(identifier, method, scopes, autoRuns);
+                return new TaskModel(identifiers, method, scopes, autoRuns);
             })
             .Where(x => x != default)
             .Collect();
@@ -91,12 +94,12 @@ public class FlowTaskGenerator : IIncrementalGenerator
 
             foreach (var task in tasks)
             {
-                var pascalId = task.Identifier.SnakeIdToPascal();
-                sb.Append(indentStr).Append("    public static IFlowTask ").Append(task.Method.Name)
-                    .Append(" { get; } = new ").Append(pascalId).AppendLine("_FlowTask();");
+                var methodName = task.Method.Name;
+                sb.Append(indentStr).Append("    public static IFlowTask ").Append(methodName)
+                    .Append(" { get; } = new ").Append(methodName).AppendLine("_FlowTask();");
                 collectedTasks.Add(task);
                 var method = task.Method;
-                sb.Append(indentStr).Append("    private sealed class ").Append(pascalId).AppendLine("_FlowTask : IFlowTask");
+                sb.Append(indentStr).Append("    private sealed class ").Append(methodName).AppendLine("_FlowTask : IFlowTask");
                 sb.Append(indentStr).AppendLine("    {");
                 sb.Append(indentStr).Append("        ").AppendGeneratedCodeAttribute();
                 sb.Append(indentStr).Append("        ").AppendExcludeFromCodeCoverageAttribute();
@@ -187,10 +190,10 @@ public class FlowTaskGenerator : IIncrementalGenerator
             sb.AppendLine("    private static async Task RegisterFlowTasks()");
             sb.AppendLine("    {");
 
-            foreach (var task in collectedTasks)
+            foreach (var task in collectedTasks) foreach (var identifier in task.GlobalIdentifiers)
             {
                 sb.Append("        Flow.Internal.RegisterTask(\"")
-                  .Append(task.GlobalIdentifier)
+                  .Append(identifier)
                   .Append("\", ")
                   .Append(task.Method.ContainingType.GetFullyQualifiedName())
                   .Append(".FlowTasks.")

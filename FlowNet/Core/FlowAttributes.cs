@@ -19,7 +19,7 @@ partial class Flow
     /// <b>NOTE</b>: 由于语言特性的限制，最多支持 7 个参数的方法，若有更多则会导致生成的代码无法编译或运行时行为不正确。
     /// </summary>
     /// <param name="identifier">标识符，若为空则自动由方法名生成，生成时将忽略单下划线前缀</param>
-    [AttributeUsage(AttributeTargets.Method)]
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public sealed class TaskAttribute(string? identifier = null) : Attribute;
 
     /// <summary>
