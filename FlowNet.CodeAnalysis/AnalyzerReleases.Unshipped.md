@@ -6,4 +6,5 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 FLOW001 | Usage | Warning | InternalWarningAnalyzer
-FLOW002 | Usage | Error | DuplicateIdentifierAnalyzer
+FLOW002 | Usage | Error | InvalidIdentifierAnalyzer
+FLOW003 | Usage | Error | InvalidIdentifierAnalyzer

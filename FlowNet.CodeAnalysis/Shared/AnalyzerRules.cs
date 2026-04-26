@@ -19,7 +19,15 @@ internal static class AnalyzerRules
         messageFormat: "Global identifier duplicated: '{0}'",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        customTags: [WellKnownDiagnosticTags.CompilationEnd]
+        isEnabledByDefault: true
+    );
+
+    public static readonly DiagnosticDescriptor EmptyIdentifier = new(
+        id: "FLOW003",
+        title: "Empty identifier is not allowed here",
+        messageFormat: "Empty identifier is not allowed without scope context, please put the method into flow scope or declare identifier explictly",
+        category: "Usage",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true
     );
 }

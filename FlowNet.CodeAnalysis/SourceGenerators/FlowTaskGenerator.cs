@@ -19,12 +19,13 @@ public class FlowTaskGenerator : IIncrementalGenerator
     );
 
     private readonly record struct TaskModel(
-        IReadOnlyList<string> Identifiers,
+        IReadOnlyList<string?> Identifiers,
         IMethodSymbol Method,
         IReadOnlyList<string> Scopes,
         IReadOnlyList<TaskAutoRunModel> AutoRuns)
     {
-        public IEnumerable<string> GlobalIdentifiers { get; } = Identifiers.Select(id => string.Join(":", Scopes.Append(id)));
+        public IEnumerable<string> GlobalIdentifiers { get; } =
+            Identifiers.Select(id => string.Join(":", id == null ? Scopes : Scopes.Append(id)));
     }
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -40,10 +41,10 @@ public class FlowTaskGenerator : IIncrementalGenerator
                 var identifiers = ctx.Attributes.Select(attr => {
                     string? identifier = null;
                     if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
-                    if (identifier == null)
+                    if (string.IsNullOrWhiteSpace(identifier))
                     {
                         var methodName = method.Name.Trim('_');
-                        identifier = (string.IsNullOrEmpty(methodName) ? method.ContainingType.Name : methodName).PascalToSnakeId();
+                        identifier = string.IsNullOrWhiteSpace(methodName) ? null : methodName.PascalToSnakeId();
                     }
                     return identifier;
                 }).Distinct(StringComparer.InvariantCulture).ToList();
