@@ -96,4 +96,13 @@ public readonly record struct FlowTaskInvokingInfo(
     IReadOnlyCollection<string> Callers)
 {
     public static readonly FlowTaskInvokingInfo Default = new(string.Empty, null, []);
+
+    public override string ToString()
+    {
+        var s = $"TaskInvokingInfo {{ " +
+            $"Target: '{Target}', " +
+            $"DirectCaller: '{DirectCaller ?? "null"}', " +
+            $"Callers: ['{string.Join("', '", Callers)}'] }}";
+        return s;
+    }
 }

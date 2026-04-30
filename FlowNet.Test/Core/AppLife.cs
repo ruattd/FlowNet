@@ -10,13 +10,16 @@ public static partial class AppLife
     [Flow.Task("run")] [Flow.Run(Before = "app:loading")]
     [Flow.Task("loading")] [Flow.Run(Before = "app:exit")]
     [Flow.Task("exit")]
-    public static Task Wildcard() => Task.CompletedTask;
+    public static Task Wildcard([Flow.InvokingInfo] FlowTaskInvokingInfo info)
+    {
+        Console.WriteLine($"Invoking wildcard: {info}");
+        return Task.CompletedTask;
+    }
 
     [Flow.Task]
     public static int Test([Flow.InvokingInfo] FlowTaskInvokingInfo info, int i)
     {
-        var (target, caller, callers) = info;
-        Console.WriteLine($"Target: {target}; Direct Caller: {caller ?? "null"}; Callers: [{string.Join(", ", callers)}]");
+        Console.WriteLine(info.ToString());
         return i;
     }
 }
