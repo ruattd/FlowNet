@@ -34,8 +34,14 @@ jobs:
           VERSION=${VERSION#v}
           dotnet publish -c ${{ inputs.config }} ${VERSION:+-p:Version=$VERSION}
 
-      - name: "Upload Artifact"
-        uses: actions/upload-artifact@v7.0.0
+      - name: "Upload Artifact (.nupkg)"
+        uses: actions/upload-artifact@v7.0.1
         with:
           path: FlowNet/bin/${{ inputs.config }}/*.nupkg
+          archive: false
+
+      - name: "Upload Artifact (.snupkg)"
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          path: FlowNet/bin/${{ inputs.config }}/*.snupkg
           archive: false

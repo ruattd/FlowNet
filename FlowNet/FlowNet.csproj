@@ -5,7 +5,10 @@
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <NoWarn>CS9113</NoWarn>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <NoWarn>CS9113;CS1591</NoWarn>
     </PropertyGroup>
 
     <PropertyGroup>
