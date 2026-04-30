@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -19,13 +18,24 @@ public class FlowTaskGenerator : IIncrementalGenerator
     );
 
     private readonly record struct TaskModel(
-        IReadOnlyList<string?> Identifiers,
+        IReadOnlyList<(string?, IReadOnlyList<TaskAutoRunModel>)> Tasks,
         IMethodSymbol Method,
-        IReadOnlyList<string> Scopes,
-        IReadOnlyList<TaskAutoRunModel> AutoRuns)
+        IReadOnlyList<string> Scopes)
     {
-        public IEnumerable<string> GlobalIdentifiers { get; } =
-            Identifiers.Select(id => string.Join(":", id == null ? Scopes : Scopes.Append(id)));
+        public void AppendFullIdentifier(StringBuilder sb, string? identifier)
+        {
+            using var it = Scopes.GetEnumerator();
+            bool hasScope;
+            // ReSharper disable once AssignmentInConditionalExpression
+            if (hasScope = it.MoveNext())
+            {
+                sb.Append(it.Current);
+                while (it.MoveNext()) sb.Append(':').Append(it.Current);
+            }
+            if (identifier == null) return;
+            if (hasScope) sb.Append(':');
+            sb.Append(identifier);
+        }
     }
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -37,28 +47,56 @@ public class FlowTaskGenerator : IIncrementalGenerator
             {
                 var method = (IMethodSymbol)ctx.TargetSymbol;
                 var scopes = method.GetContainingScopes();
-                // 提取 identifier
-                var identifiers = ctx.Attributes.Select(attr => {
-                    string? identifier = null;
-                    if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
-                    if (string.IsNullOrWhiteSpace(identifier))
+                var tasks = new List<(string?, IReadOnlyList<TaskAutoRunModel>)>();
+
+                var currentRuns = new List<AttributeData>();
+                var isTaskRecordStarted = false;
+                string? currentIdentifier = null;
+
+                // 收集任务标记
+                foreach (var attr in method.GetAttributes())
+                {
+                    var attrName = attr.AttributeClass?.GetSimplifiedTypeName();
+                    if (attrName == Constants.FlowTaskAttribute)
                     {
-                        var methodName = method.Name.Trim('_');
-                        identifier = string.IsNullOrWhiteSpace(methodName) ? null : methodName.PascalToSnakeId();
+                        CheckAndSubmit();
+                        // 提取 identifier
+                        string? identifier = null;
+                        if (attr.ConstructorArguments.Length > 0) identifier = attr.ConstructorArguments[0].Value as string;
+                        if (string.IsNullOrWhiteSpace(identifier))
+                        {
+                            var methodName = method.Name.Trim('_');
+                            identifier = string.IsNullOrWhiteSpace(methodName) ? null : methodName.PascalToSnakeId();
+                        }
+                        // 开始新一组
+                        currentIdentifier = identifier;
+                        if (isTaskRecordStarted) currentRuns.Clear();
+                        isTaskRecordStarted = true;
                     }
-                    return identifier;
-                }).Distinct(StringComparer.InvariantCulture).ToList();
-                // 提取自动执行配置
-                var runAttrs = method.GetAttributes().Where(a =>
-                    a.AttributeClass?.GetFullyQualifiedName() == Constants.FlowRunAttribute);
-                var autoRuns = (
-                    from a in runAttrs
-                    let before = a.NamedArguments.FirstOrDefault(x => x.Key == "Before").Value.Value as string
-                    let after = a.NamedArguments.FirstOrDefault(x => x.Key == "After").Value.Value as string
-                    let priority = a.NamedArguments.FirstOrDefault(x => x.Key == "Priority").Value.Value is int p ? p : 0
-                    select new TaskAutoRunModel(before, after, priority)
-                ).ToList();
-                return new TaskModel(identifiers, method, scopes, autoRuns);
+                    else if (attrName == Constants.FlowRunAttribute)
+                    {
+                        // 记录自动执行配置
+                        currentRuns.Add(attr);
+                    }
+                }
+                CheckAndSubmit();
+
+                return new TaskModel(tasks, method, scopes);
+
+                void CheckAndSubmit()
+                {
+                    if (!isTaskRecordStarted) return;
+                    // 提取上一组记录的自动执行配置
+                    var autoRuns = (
+                        from a in currentRuns
+                        let before = a.NamedArguments.FirstOrDefault(x => x.Key == "Before").Value.Value as string
+                        let after = a.NamedArguments.FirstOrDefault(x => x.Key == "After").Value.Value as string
+                        let priority = a.NamedArguments.FirstOrDefault(x => x.Key == "Priority").Value.Value is int p ? p : 0
+                        select new TaskAutoRunModel(before, after, priority)
+                    ).ToList();
+                    // 提交存储上一组
+                    tasks.Add((currentIdentifier, autoRuns));
+                }
             })
             .Where(x => x != default)
             .Collect();
@@ -117,7 +155,7 @@ public class FlowTaskGenerator : IIncrementalGenerator
                     param = param.Length > 1 ? param.Slice(1, param.Length - 1) : [];
                 }
                 sb.Append(indentStr).Append("        public async Task<TReturn> Invoke<TReturn, TArgument>" +
-                    "(TArgument argument, FlowTaskInvokingInfo ").Append(hasInvokingInfo ? "invokingInfo)" : "_)");
+                    "(TArgument argument, FlowTaskInvokingInfo ").AppendLine(hasInvokingInfo ? "invokingInfo)" : "_)");
                 sb.Append(indentStr).AppendLine("        {");
                 sb.Append(indentStr).Append("            if (argument is not ");
                 if (param.Length == 0) sb.AppendLine("None)");
@@ -191,15 +229,15 @@ public class FlowTaskGenerator : IIncrementalGenerator
             sb.AppendLine("    private static async Task RegisterFlowTasks()");
             sb.AppendLine("    {");
 
-            foreach (var task in collectedTasks) foreach (var identifier in task.GlobalIdentifiers)
+            foreach (var task in collectedTasks) foreach (var (identifier, runs) in task.Tasks)
             {
-                sb.Append("        Flow.Internal.RegisterTask(\"")
-                  .Append(identifier)
-                  .Append("\", ")
+                sb.Append("        Flow.Internal.RegisterTask(\"");
+                task.AppendFullIdentifier(sb, identifier);
+                sb.Append("\", ")
                   .Append(task.Method.ContainingType.GetFullyQualifiedName())
                   .Append(".FlowTasks.")
                   .Append(task.Method.Name);
-                foreach (var run in task.AutoRuns)
+                foreach (var run in runs)
                 {
                     sb.AppendLine(",");
                     sb.Append("            (")

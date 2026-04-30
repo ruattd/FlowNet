@@ -23,7 +23,8 @@ partial class Flow
     public sealed class TaskAttribute(string? identifier = null) : Attribute;
 
     /// <summary>
-    /// 为已标记的 Flow 任务配置自动执行。
+    /// 为已标记的 Flow 任务配置自动执行。<br/>
+    /// <b>NOTE</b>: 将一个方法声明为多个 Flow 任务时，该标记应写在对应的 <see cref="Flow.TaskAttribute"/> 之后。
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public sealed class RunAttribute : Attribute

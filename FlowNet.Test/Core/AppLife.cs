@@ -7,25 +7,16 @@ namespace FlowNet.Test.Core;
 [Flow.Scope("app")]
 public static partial class AppLife
 {
-    [Flow.Task]
-    public static int Start()
-    {
-        return 0;
-    }
+    [Flow.Task("run")] [Flow.Run(Before = "app:loading")]
+    [Flow.Task("loading")] [Flow.Run(Before = "app:exit")]
+    [Flow.Task("exit")]
+    public static Task Wildcard() => Task.CompletedTask;
 
     [Flow.Task]
-    [Flow.Task("test1")]
-    public static int Start1([Flow.InvokingInfo] FlowTaskInvokingInfo info, int i)
+    public static int Test([Flow.InvokingInfo] FlowTaskInvokingInfo info, int i)
     {
+        var (target, caller, callers) = info;
+        Console.WriteLine($"Target: {target}; Direct Caller: {caller ?? "null"}; Callers: [{string.Join(", ", callers)}]");
         return i;
-    }
-
-    [Flow.Task]
-    [Flow.Run(Before = "app:start1")]
-    [Flow.Run(After = "app:run")]
-    private static async Task _Test()
-    {
-        var r = await Flow.InvokeTask<int, int>("app:start", 123);
-        Console.WriteLine($"Output: {r}");
     }
 }

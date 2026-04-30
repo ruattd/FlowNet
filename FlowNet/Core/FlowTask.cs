@@ -91,8 +91,9 @@ public interface IFlowTask
 /// <param name="DirectCaller">直接调用者，可能为 <see langword="null"/></param>
 /// <param name="Callers">相关调用者，不存在时为空列表，不包含 <paramref name="DirectCaller"/></param>
 public readonly record struct FlowTaskInvokingInfo(
+    string Target,
     string? DirectCaller,
     IReadOnlyCollection<string> Callers)
 {
-    public static readonly FlowTaskInvokingInfo Default = new(null, []);
+    public static readonly FlowTaskInvokingInfo Default = new(string.Empty, null, []);
 }
