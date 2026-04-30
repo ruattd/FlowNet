@@ -49,256 +49,146 @@ file sealed class FlowRunTask : IFlowTask
 
     private static void BuildAutoRunMap()
     {
-        var autoRunConfigMap = new Dictionary<string, List<FlowTaskAutoRunConfig>>(StringComparer.Ordinal);
-        var priorityMap = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var config in _AutoRunConfigs)
+        // === Usage ===
+        // 根据 _AutoRunConfigs 中的内容对其中 identifier 排序并生成局部变量 runMap，赋值给 _AutoRunMap
+        // 排序规则：
+        // 1. after 锚点表示该 identifier 排在锚点命中的 identifier 之后，且该 identifier 和命中的 identifier 都应添加进 runMap
+        // 2. before 锚点表示该 identifier 排在锚点命中的 identifier 之前，但在该 identifier 的 after 锚点为 null 且不存在其他 identifier 的 after 锚点命中该 identifier 时，该 identifier 不应被添加进 runMap
+        // 3. 互相之间没有明确的 before/after 关系且恰好在同一个位置的两个 identifier 应属于同级
+        // 4. 遵循“最小距离”原则，即所有 identifier 与其锚点命中的 identifier 的距离应尽可能近。
+        // 生成的 runMap：
+        // 1. 应为一个由上述排序规则规定的 List，该 List 的每一个元素均为由同级 identifier 元素构成的列表，列表按照 identifier 的 priority 排序
+        // 2. 每个 identifier 元素均为 identifier 本身和一个 HashSet 构成的 ValueTuple，该 HashSet 由“该 identifier 的 before/after 命中的 identifier”和“after 命中该 identifier 的 identifier”构成
+        // 3. 若 _AutoRunConfigs 中重复出现同一个 identifier，则应分别按各自的锚点将该 identifier 添加进 runMap 多次，但此时其他 identifier 不应命中该 identifier，若命中则抛出异常
+        // 4. 不应存在循环引用，若存在则抛出异常
+
+        static bool AnchorMatches(string? anchor, string identifier)
+            => anchor != null && Regex.IsMatch(identifier, anchor);
+
+        var configs = _AutoRunConfigs
+            .Select((config, index) => (config, index))
+            .ToArray();
+
+        var duplicateIdentifiers = configs
+            .GroupBy(x => x.config.Identifier)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key);
+
+        foreach (var duplicateIdentifier in duplicateIdentifiers) foreach (var (config, _) in configs)
         {
-            if (!autoRunConfigMap.TryGetValue(config.Identifier, out var configs))
-                autoRunConfigMap[config.Identifier] = configs = [];
-            configs.Add(config);
-            if (!priorityMap.TryGetValue(config.Identifier, out var priority) || config.Priority > priority)
-                priorityMap[config.Identifier] = config.Priority;
+            if (AnchorMatches(config.Before, duplicateIdentifier) || AnchorMatches(config.After, duplicateIdentifier))
+                throw new InvalidOperationException($"Multi-run task '{duplicateIdentifier}' cannot be targeted by '{config.Identifier}'.");
         }
 
-        var allIdentifiers = new List<string>();
-        var allIdentifierSet = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var identifier in Flow.TaskIdentifiers)
+        var matchedBefore = new List<int>[configs.Length];
+        var matchedAfter = new List<int>[configs.Length];
+        var incomingAfter = new List<int>[configs.Length];
+        for (var i = 0; i < configs.Length; i++)
         {
-            if (string.Equals(identifier, "flow:run", StringComparison.Ordinal))
-                continue;
-            if (allIdentifierSet.Add(identifier))
-                allIdentifiers.Add(identifier);
+            matchedBefore[i] = [];
+            matchedAfter[i] = [];
+            incomingAfter[i] = [];
         }
-        allIdentifiers.Sort(StringComparer.Ordinal);
 
-        var beforeTargetsMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        var afterTargetsMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        var beforeSourcesMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        var afterSourcesMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-
-        foreach (var pair in autoRunConfigMap)
+        for (var i = 0; i < configs.Length; i++)
         {
-            var sourceIdentifier = pair.Key;
-            foreach (var config in pair.Value)
+            var current = configs[i].config;
+            for (var j = 0; j < configs.Length; j++)
             {
-                if (!string.IsNullOrWhiteSpace(config.Before))
+                if (i == j) continue;
+                var target = configs[j].config.Identifier;
+                if (AnchorMatches(current.Before, target)) matchedBefore[i].Add(j);
+                if (AnchorMatches(current.After, target))
                 {
-                    foreach (var targetIdentifier in ResolveMatches(config.Before!, sourceIdentifier))
-                    {
-                        AddRelation(beforeTargetsMap, sourceIdentifier, targetIdentifier);
-                        AddRelation(beforeSourcesMap, targetIdentifier, sourceIdentifier);
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(config.After))
-                {
-                    foreach (var targetIdentifier in ResolveMatches(config.After!, sourceIdentifier))
-                    {
-                        AddRelation(afterTargetsMap, sourceIdentifier, targetIdentifier);
-                        AddRelation(afterSourcesMap, targetIdentifier, sourceIdentifier);
-                    }
-                }
-            }
-        }
-
-        var includedIdentifiers = new HashSet<string>(StringComparer.Ordinal);
-        var pendingIdentifiers = new Queue<string>();
-        foreach (var pair in afterTargetsMap)
-        {
-            IncludeIdentifier(pair.Key);
-            foreach (var targetIdentifier in pair.Value)
-                IncludeIdentifier(targetIdentifier);
-        }
-
-        while (pendingIdentifiers.Count > 0)
-        {
-            var identifier = pendingIdentifiers.Dequeue();
-            if (!beforeSourcesMap.TryGetValue(identifier, out var sourceIdentifiers))
-                continue;
-            foreach (var sourceIdentifier in sourceIdentifiers)
-                IncludeIdentifier(sourceIdentifier);
-        }
-
-        var sortedIdentifiers = new List<string>(includedIdentifiers);
-        sortedIdentifiers.Sort(StringComparer.Ordinal);
-
-        var adjacencyMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        var indegreeMap = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var identifier in sortedIdentifiers)
-        {
-            adjacencyMap[identifier] = new HashSet<string>(StringComparer.Ordinal);
-            indegreeMap[identifier] = 0;
-        }
-
-        foreach (var pair in afterTargetsMap)
-        {
-            foreach (var targetIdentifier in pair.Value)
-                AddEdge(targetIdentifier, pair.Key);
-        }
-
-        foreach (var pair in beforeTargetsMap)
-        {
-            foreach (var targetIdentifier in pair.Value)
-                AddEdge(pair.Key, targetIdentifier);
-        }
-
-        var currentLevel = new List<string>();
-        foreach (var identifier in sortedIdentifiers)
-        {
-            if (indegreeMap[identifier] == 0)
-                currentLevel.Add(identifier);
-        }
-        SortLevel(currentLevel);
-
-        _AutoRunMap = [];
-        var resolvedCount = 0;
-        while (currentLevel.Count > 0)
-        {
-            var level = new (string, IReadOnlyCollection<string>)[currentLevel.Count];
-            for (var i = 0; i < currentLevel.Count; i++) level[i] = BuildEntry(currentLevel[i]);
-            _AutoRunMap.Add(level);
-            resolvedCount += currentLevel.Count;
-
-            var nextLevel = new List<string>();
-            foreach (var identifier in currentLevel)
-            {
-                foreach (var nextIdentifier in adjacencyMap[identifier])
-                {
-                    indegreeMap[nextIdentifier]--;
-                    if (indegreeMap[nextIdentifier] == 0)
-                        nextLevel.Add(nextIdentifier);
+                    matchedAfter[i].Add(j);
+                    incomingAfter[j].Add(i);
                 }
             }
-
-            SortLevel(nextLevel);
-            currentLevel = nextLevel;
         }
 
-        if (resolvedCount != sortedIdentifiers.Count)
+        var included = new bool[configs.Length];
+        for (var i = 0; i < configs.Length; i++)
+            included[i] = matchedAfter[i].Count > 0 || incomingAfter[i].Count > 0;
+
+        var edges = new HashSet<int>[configs.Length];
+        for (var i = 0; i < configs.Length; i++) edges[i] = [];
+
+        for (var i = 0; i < configs.Length; i++)
         {
-            var cyclicIdentifiers = new List<string>();
-            foreach (var identifier in sortedIdentifiers)
+            foreach (var target in matchedAfter[i])
             {
-                if (indegreeMap[identifier] > 0)
-                    cyclicIdentifiers.Add(identifier);
-            }
-            cyclicIdentifiers.Sort(StringComparer.Ordinal);
-            throw new InvalidOperationException(
-                $"Auto-run order contains cyclic dependencies: {string.Join(", ", cyclicIdentifiers)}.");
-        }
-
-        return;
-
-        void AddRelation(Dictionary<string, HashSet<string>> relationMap, string sourceIdentifier,
-            string targetIdentifier)
-        {
-            if (!relationMap.TryGetValue(sourceIdentifier, out var identifiers))
-                relationMap[sourceIdentifier] = identifiers = new HashSet<string>(StringComparer.Ordinal);
-            identifiers.Add(targetIdentifier);
-        }
-
-        void IncludeIdentifier(string identifier)
-        {
-            if (includedIdentifiers.Add(identifier))
-                pendingIdentifiers.Enqueue(identifier);
-        }
-
-        void AddEdge(string fromIdentifier, string toIdentifier)
-        {
-            if (string.Equals(fromIdentifier, toIdentifier, StringComparison.Ordinal)
-                || !includedIdentifiers.Contains(fromIdentifier)
-                || !includedIdentifiers.Contains(toIdentifier))
-                return;
-            if (adjacencyMap[fromIdentifier].Add(toIdentifier))
-                indegreeMap[toIdentifier]++;
-        }
-
-        void SortLevel(List<string> identifiers)
-        {
-            identifiers.Sort((left, right) =>
-            {
-                var byPriority = GetPriority(right).CompareTo(GetPriority(left));
-                return byPriority != 0
-                    ? byPriority
-                    : StringComparer.Ordinal.Compare(left, right);
-            });
-        }
-
-        int GetPriority(string identifier)
-            => priorityMap.TryGetValue(identifier, out var priority) ? priority : 0;
-
-        (string, IReadOnlyCollection<string>) BuildEntry(string identifier)
-        {
-            var seenIdentifiers = new HashSet<string>(StringComparer.Ordinal) { identifier };
-
-            if (beforeTargetsMap.TryGetValue(identifier, out var beforeTargets))
-            {
-                var actualTargets = beforeTargets.Where(targetIdentifier => includedIdentifiers.Contains(targetIdentifier)).ToList();
-                foreach (var targetIdentifier in actualTargets) seenIdentifiers.Add(targetIdentifier);
-            }
-            if (afterSourcesMap.TryGetValue(identifier, out var afterSources))
-            {
-                foreach (var sourceIdentifier in afterSources) seenIdentifiers.Add(sourceIdentifier);
+                included[target] = true;
+                included[i] = true;
+                edges[target].Add(i);
             }
 
-            seenIdentifiers.Remove(identifier);
-            return (identifier, seenIdentifiers);
+            foreach (var target in matchedBefore[i])
+            {
+                if (!included[i]) continue;
+                included[target] = true;
+                edges[i].Add(target);
+            }
         }
 
-        IEnumerable<string> ResolveMatches(string pattern, string sourceIdentifier)
+        var indegree = new int[configs.Length];
+        for (var i = 0; i < configs.Length; i++)
         {
-            if (allIdentifierSet.Contains(pattern)) {
-                if (!string.Equals(pattern, sourceIdentifier, StringComparison.Ordinal)) yield return pattern;
-                yield break;
+            if (!included[i]) continue;
+            foreach (var target in edges[i])
+            {
+                if (!included[target]) continue;
+                indegree[target]++;
             }
+        }
 
-            string regexPattern;
-            if (pattern.Length > 1 && pattern[0] == '/' && pattern[pattern.Length - 1] == '/')
+        var processed = new bool[configs.Length];
+        var levels = new int[configs.Length];
+        var queue = new Queue<int>();
+        for (var i = 0; i < configs.Length; i++)
+            if (included[i] && indegree[i] == 0)
+                queue.Enqueue(i);
+
+        var visitedCount = 0;
+        while (queue.Count > 0)
+        {
+            var node = queue.Dequeue();
+            if (processed[node]) continue;
+            processed[node] = true;
+            visitedCount++;
+
+            foreach (var target in edges[node])
             {
-                regexPattern = pattern.Substring(1, pattern.Length - 2);
+                if (!included[target]) continue;
+                levels[target] = Math.Max(levels[target], levels[node] + 1);
+                indegree[target]--;
+                if (indegree[target] == 0)
+                    queue.Enqueue(target);
             }
-            else
-            {
-                var hasWildcard = false;
-                var hasRegex = false;
-                foreach (var c in pattern)
+        }
+
+        var includedCount = included.Count(x => x);
+        if (visitedCount != includedCount)
+            throw new InvalidOperationException("Circular auto-run dependency detected.");
+
+        var runMap = levels
+            .Select((level, index) => new { level, index })
+            .Where(x => included[x.index])
+            .GroupBy(x => x.level)
+            .OrderBy(g => g.Key)
+            .Select(g => (IReadOnlyList<(string, IReadOnlyCollection<string>)>)g
+                .Select(x =>
                 {
-                    switch (c)
-                    {
-                        case '*':
-                        case '?':
-                            hasWildcard = true;
-                            break;
-                        case '[': case ']': case '(': case ')':
-                        case '{': case '}': case '+': case '|':
-                        case '\\': case '^': case '$': case '.':
-                            hasRegex = true;
-                            break;
-                    }
-                }
+                    var callers = new HashSet<string>();
+                    foreach (var target in matchedBefore[x.index]) callers.Add(configs[target].config.Identifier);
+                    foreach (var target in matchedAfter[x.index]) callers.Add(configs[target].config.Identifier);
+                    foreach (var source in incomingAfter[x.index]) callers.Add(configs[source].config.Identifier);
+                    return (configs[x.index].config.Identifier, (IReadOnlyCollection<string>)callers);
+                })
+                .OrderBy(x => configs[Array.FindIndex(configs, c => c.config.Identifier == x.Item1 && included[c.index] && levels[c.index] == g.Key)].config.Priority)
+                .ToArray())
+            .ToList();
 
-                if (!hasWildcard && !hasRegex)
-                    yield break;
-
-                regexPattern = hasRegex ? pattern : Regex.Escape(pattern).Replace("\\*", ".*").Replace("\\?", ".");
-            }
-
-            Regex regex;
-            try
-            {
-                regex = new Regex($"^(?:{regexPattern})$", RegexOptions.CultureInvariant);
-            }
-            catch (ArgumentException ex)
-            {
-                throw new InvalidOperationException($"Invalid auto-run anchor pattern '{pattern}'.", ex);
-            }
-
-            foreach (var candidate in allIdentifiers)
-            {
-                if (string.Equals(candidate, sourceIdentifier, StringComparison.Ordinal)) continue;
-                if (regex.IsMatch(candidate)) yield return candidate;
-            }
-        }
+        _AutoRunMap = runMap;
     }
 
     private static async Task Run()
@@ -313,7 +203,7 @@ file sealed class FlowRunTask : IFlowTask
                 if (!Flow.ExistsTask(id)) continue; // bypass non-existent identifier
                 var invokingInfo = FlowTaskInvokingInfo.Default;
                 if (Flow.EnableTaskInvokingInfo)
-                    invokingInfo = new FlowTaskInvokingInfo("flow:run", callers);
+                    invokingInfo = new FlowTaskInvokingInfo(id, "flow:run", callers);
                 tasks[i] = Task.Run(() => Flow.Internal.InvokeTask<None, None>(id, default, invokingInfo));
             }
             await Task.WhenAll(tasks).ConfigureAwait(false);
