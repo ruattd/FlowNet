@@ -19,9 +19,9 @@ public static partial class AppLife
     }
 
     [Flow.Task]
-    public static int Test([Flow.InvokingInfo] FlowTaskInvokingInfo info, int i)
+    public static int Test([Flow.InvokingInfo] FlowTaskInvokingInfo info)
     {
         Console.WriteLine(info.ToString());
-        return i;
+        return 114514;
     }
 }

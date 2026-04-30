@@ -62,17 +62,59 @@ file sealed class FlowRunTask : IFlowTask
         // 3. 若 _AutoRunConfigs 中重复出现同一个 identifier，则应分别按各自的锚点将该 identifier 添加进 runMap 多次，但此时其他 identifier 不应命中该 identifier，若命中则抛出异常
         // 4. 不应存在循环引用，若存在则抛出异常
 
+        static bool IsRegexAnchor(string anchor)
+        {
+            var escaped = false;
+            foreach (var c in anchor)
+            {
+                if (escaped) return true;
+                if (c == '\\')
+                {
+                    escaped = true;
+                    continue;
+                }
+                if (c is '.' or '+' or '?' or '|' or '(' or ')' or '[' or ']' or '{' or '}' or '^' or '$')
+                    return true;
+            }
+            return false;
+        }
+
+        static string BuildWildcardRegex(string anchor)
+        {
+            var patterns = new List<string>(anchor.Length);
+            for (var i = 0; i < anchor.Length; i++)
+            {
+                if (anchor[i] == '*')
+                {
+                    if (i + 1 < anchor.Length && anchor[i + 1] == '*')
+                    {
+                        patterns.Add(".*");
+                        i++;
+                    }
+                    else patterns.Add("[^:]*");
+                    continue;
+                }
+                patterns.Add(Regex.Escape(anchor[i].ToString()));
+            }
+            return string.Concat(patterns);
+        }
+
         static bool AnchorMatches(string? anchor, string identifier)
-            => anchor != null && Regex.IsMatch(identifier, anchor);
+        {
+            if (anchor == null) return false;
+            var pattern = IsRegexAnchor(anchor) ? anchor : BuildWildcardRegex(anchor);
+            return Regex.IsMatch(identifier, $@"\A(?:{pattern})\z");
+        }
 
         var configs = _AutoRunConfigs
             .Select((config, index) => (config, index))
             .ToArray();
 
-        var duplicateIdentifiers = new HashSet<string>(configs
+        var duplicateIdentifiers = configs
             .GroupBy(x => x.config.Identifier)
             .Where(g => g.Count() > 1)
-            .Select(g => g.Key));
+            .Select(g => g.Key)
+            .Distinct();
 
         foreach (var duplicateIdentifier in duplicateIdentifiers)
         {
