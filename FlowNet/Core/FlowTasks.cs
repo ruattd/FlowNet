@@ -69,15 +69,19 @@ file sealed class FlowRunTask : IFlowTask
             .Select((config, index) => (config, index))
             .ToArray();
 
-        var duplicateIdentifiers = configs
+        var duplicateIdentifiers = new HashSet<string>(configs
             .GroupBy(x => x.config.Identifier)
             .Where(g => g.Count() > 1)
-            .Select(g => g.Key);
+            .Select(g => g.Key));
 
-        foreach (var duplicateIdentifier in duplicateIdentifiers) foreach (var (config, _) in configs)
+        foreach (var duplicateIdentifier in duplicateIdentifiers)
         {
-            if (AnchorMatches(config.Before, duplicateIdentifier) || AnchorMatches(config.After, duplicateIdentifier))
-                throw new InvalidOperationException($"Multi-run task '{duplicateIdentifier}' cannot be targeted by '{config.Identifier}'.");
+            foreach (var (config, _) in configs)
+            {
+                if (config.Identifier == duplicateIdentifier) continue;
+                if (AnchorMatches(config.Before, duplicateIdentifier) || AnchorMatches(config.After, duplicateIdentifier))
+                    throw new InvalidOperationException($"Multi-run task '{duplicateIdentifier}' cannot be targeted by '{config.Identifier}'.");
+            }
         }
 
         var matchedBefore = new List<int>[configs.Length];
@@ -107,26 +111,45 @@ file sealed class FlowRunTask : IFlowTask
         }
 
         var included = new bool[configs.Length];
+        var includeQueue = new Queue<int>();
+
+        void Include(int index)
+        {
+            if (included[index]) return;
+            included[index] = true;
+            includeQueue.Enqueue(index);
+        }
+
         for (var i = 0; i < configs.Length; i++)
-            included[i] = matchedAfter[i].Count > 0 || incomingAfter[i].Count > 0;
+        {
+            if (configs[i].config.After != null || incomingAfter[i].Count > 0)
+                Include(i);
+        }
+
+        while (includeQueue.Count > 0)
+        {
+            var node = includeQueue.Dequeue();
+            foreach (var target in matchedAfter[node]) Include(target);
+            foreach (var target in matchedBefore[node]) Include(target);
+        }
 
         var edges = new HashSet<int>[configs.Length];
         for (var i = 0; i < configs.Length; i++) edges[i] = [];
 
         for (var i = 0; i < configs.Length; i++)
         {
+            if (!included[i]) continue;
+
             foreach (var target in matchedAfter[i])
             {
-                included[target] = true;
-                included[i] = true;
-                edges[target].Add(i);
+                if (included[target])
+                    edges[target].Add(i);
             }
 
             foreach (var target in matchedBefore[i])
             {
-                if (!included[i]) continue;
-                included[target] = true;
-                edges[i].Add(target);
+                if (included[target])
+                    edges[i].Add(target);
             }
         }
 
@@ -136,29 +159,27 @@ file sealed class FlowRunTask : IFlowTask
             if (!included[i]) continue;
             foreach (var target in edges[i])
             {
-                if (!included[target]) continue;
-                indegree[target]++;
+                if (included[target])
+                    indegree[target]++;
             }
         }
 
-        var processed = new bool[configs.Length];
         var levels = new int[configs.Length];
         var queue = new Queue<int>();
         for (var i = 0; i < configs.Length; i++)
+        {
             if (included[i] && indegree[i] == 0)
                 queue.Enqueue(i);
+        }
 
         var visitedCount = 0;
         while (queue.Count > 0)
         {
             var node = queue.Dequeue();
-            if (processed[node]) continue;
-            processed[node] = true;
             visitedCount++;
 
             foreach (var target in edges[node])
             {
-                if (!included[target]) continue;
                 levels[target] = Math.Max(levels[target], levels[node] + 1);
                 indegree[target]--;
                 if (indegree[target] == 0)
@@ -171,11 +192,13 @@ file sealed class FlowRunTask : IFlowTask
             throw new InvalidOperationException("Circular auto-run dependency detected.");
 
         var runMap = levels
-            .Select((level, index) => new { level, index })
+            .Select((level, index) => (level, index))
             .Where(x => included[x.index])
             .GroupBy(x => x.level)
             .OrderBy(g => g.Key)
             .Select(g => (IReadOnlyList<(string, IReadOnlyCollection<string>)>)g
+                .OrderBy(x => configs[x.index].config.Priority)
+                .ThenBy(x => x.index)
                 .Select(x =>
                 {
                     var callers = new HashSet<string>();
@@ -184,7 +207,6 @@ file sealed class FlowRunTask : IFlowTask
                     foreach (var source in incomingAfter[x.index]) callers.Add(configs[source].config.Identifier);
                     return (configs[x.index].config.Identifier, (IReadOnlyCollection<string>)callers);
                 })
-                .OrderBy(x => configs[Array.FindIndex(configs, c => c.config.Identifier == x.Item1 && included[c.index] && levels[c.index] == g.Key)].config.Priority)
                 .ToArray())
             .ToList();
 

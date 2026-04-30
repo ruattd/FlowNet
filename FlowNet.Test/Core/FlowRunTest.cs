@@ -23,14 +23,14 @@ public sealed partial class FlowRunTest
     }
 
     [Flow.Task]
-    [Flow.Run(After = "app:exit")]
+    [Flow.Run(After = "app:exiting")]
     private static void _TestTask3()
     {
         Console.WriteLine("Task3 invoked");
     }
 
     [Flow.Task]
-    [Flow.Run(Before = "app:exit")]
+    [Flow.Run(Before = "app:exiting")]
     private static void _TestTask4()
     {
         Console.WriteLine("Task4 invoked");
@@ -39,6 +39,7 @@ public sealed partial class FlowRunTest
     [TestMethod]
     public async Task Test()
     {
+        Console.WriteLine("Running flow:run test...");
         Flow.EnableTaskInvokingInfo = true;
         await FlowInterops.Run();
     }
