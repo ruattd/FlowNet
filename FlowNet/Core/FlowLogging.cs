@@ -6,16 +6,61 @@ namespace FlowNet.Core;
 
 partial class Flow
 {
-    public static event Action<FlowLogItem>? OnLog;
+    private static readonly FlowEvent<FlowLogItem> _LogEvent = new();
+
+    /// <summary>
+    /// 记录日志时触发的预览事件
+    /// </summary>
+    public static event FlowPreviewEventHandler<FlowLogItem> PreviewOnLog
+    {
+        add => _LogEvent.AddPreviewHandler(value);
+        remove => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// 记录日志时触发的事件
+    /// </summary>
+    public static event FlowEventHandler<FlowLogItem> OnLog
+    {
+        add => _LogEvent.AddHandler(value);
+        remove => throw new NotSupportedException();
+    }
 
     partial class Internal
     {
-        public static void CreateLog(FlowLogItem logItem) => OnLog?.Invoke(logItem);
+        public static void SendLog(FlowLogItem logItem) => _LogEvent.Invoke(logItem);
     }
 }
 
-public readonly record struct FlowLogItem
+public static class FlowLoggingExtensions
 {
+    public static void Send(this FlowLogItem item) => Flow.Internal.SendLog(item);
+
+    public static void Log(this Flow.ScopeContext context, string message,
+        Exception? cause = null, Action<FlowLogItem>? configScope = null)
+    {
+        var logItem = FlowLogItem.Create(message, context.Identifier, cause);
+        configScope?.Invoke(logItem);
+        logItem.Send();
+    }
+}
+
+public readonly struct FlowLogItem : IEquatable<FlowLogItem>
+{
+    private static ulong _nextLogId = 0;
+
+    private readonly ulong _id = _nextLogId++;
+
+    public bool Equals(FlowLogItem other)
+    {
+        return _id == other._id;
+    }
+
+    public override int GetHashCode()
+    {
+        return _id.GetHashCode();
+    }
+
     /// <summary>
     /// 日志项的内容
     /// </summary>
@@ -43,18 +88,30 @@ public readonly record struct FlowLogItem
     }
 
     /// <summary>
-    /// 获取日志项的元数据
+    /// 获取或设置日志项的元数据
     /// </summary>
     /// <param name="key">元数据键</param>
     /// <exception cref="KeyNotFoundException">指定的键不存在</exception>
+    /// <exception cref="NotSupportedException">元数据字典不支持修改</exception>
     /// <returns>指定的键对应的元数据值</returns>
-    public AnyValue this[string key] => key switch
+    public AnyValue this[string key]
     {
-        nameof(Message) => AnyValue.Of(Message),
-        nameof(ScopeIdentifier) => AnyValue.Of(ScopeIdentifier),
-        nameof(Cause) => AnyValue.Of(Cause),
-        _ => _metadata?[key] ?? throw new KeyNotFoundException($"Key '{key}' not found in metadata")
-    };
+        get => key switch
+        {
+            nameof(Message) => AnyValue.Of(Message),
+            nameof(ScopeIdentifier) => AnyValue.Of(ScopeIdentifier),
+            nameof(Cause) => AnyValue.Of(Cause),
+            _ => _metadata?[key] ?? throw new KeyNotFoundException($"Key '{key}' not found in metadata")
+        };
+        set
+        {
+            IDictionary<string, AnyValue> metadata;
+            if (_metadata == null) metadata = new Dictionary<string, AnyValue>();
+            else if (_metadata is IDictionary<string, AnyValue> data) metadata = data;
+            else throw new NotSupportedException("Immutable metadata dictionary");
+            metadata[key] = value;
+        }
+    }
 
     /// <summary>
     /// 创建日志项

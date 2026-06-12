@@ -5,6 +5,9 @@ namespace FlowNet.Core;
 
 partial class Flow
 {
+    /// <summary>
+    /// 作用域上下文，用于一些需要作用域身份的操作。
+    /// </summary>
     public class ScopeContext
     {
         private static readonly HashSet<string> _CreatedIdentifiers = [];

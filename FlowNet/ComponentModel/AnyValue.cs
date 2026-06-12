@@ -37,6 +37,8 @@ public readonly struct AnyValue
 #endif
         /// <summary>引用类型或装箱后的非基本值类型。</summary>
         Reference,
+        /// <summary>枚举类型；底层整数值内联存储于 <see cref="PrimitiveUnion"/>，枚举的 <see cref="Type"/> 存储于 <c>_reference</c> 字段。</summary>
+        Enum,
     }
 
     /// <summary>
@@ -105,6 +107,7 @@ public readonly struct AnyValue
         if (typeof(T) == typeof(Int128)) return Tag.Int128;
         if (typeof(T) == typeof(UInt128)) return Tag.UInt128;
 #endif
+        if (typeof(T).IsEnum) return Tag.Enum;
         return Tag.Empty;
     }
 
@@ -116,13 +119,14 @@ public readonly struct AnyValue
 
     /// <summary>
     /// 用指定的 <paramref name="value"/> 和 <paramref name="tag"/> 打包出一个内联存储的 <see cref="AnyValue"/>。
+    /// 对枚举类型须通过 <paramref name="reference"/> 传入 <c>typeof(T)</c> 以便精确还原。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static AnyValue Pack<T>(T value, Tag tag)
+    private static AnyValue Pack<T>(T value, Tag tag, object? reference = null)
     {
         var union = default(PrimitiveUnion);
         As<T>(ref union) = value;
-        return new AnyValue(union, tag);
+        return new AnyValue(union, tag, reference);
     }
 
     public static readonly AnyValue Null = new(null);
@@ -186,20 +190,39 @@ public readonly struct AnyValue
                 Tag.UInt128 => As<UInt128>(ref u),
 #endif
                 Tag.Reference => _reference,
+                Tag.Enum => BoxEnum(u, (Type)_reference!),
                 _ => null,
             };
         }
     }
 
     /// <summary>
+    /// 根据内联存储的底层整数和枚举的 <see cref="Type"/> 重新装箱出对应的枚举值。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static object BoxEnum(PrimitiveUnion u, Type enumType) =>
+        Type.GetTypeCode(Enum.GetUnderlyingType(enumType)) switch
+        {
+            TypeCode.Byte => Enum.ToObject(enumType, u.Byte),
+            TypeCode.SByte => Enum.ToObject(enumType, u.SByte),
+            TypeCode.Int16 => Enum.ToObject(enumType, u.Int16),
+            TypeCode.UInt16 => Enum.ToObject(enumType, u.UInt16),
+            TypeCode.Int32 => Enum.ToObject(enumType, u.Int32),
+            TypeCode.UInt32 => Enum.ToObject(enumType, u.UInt32),
+            TypeCode.Int64 => Enum.ToObject(enumType, u.Int64),
+            TypeCode.UInt64 => Enum.ToObject(enumType, u.UInt64),
+            _ => throw new InvalidOperationException($"Unsupported enum underlying type for {enumType.FullName}"),
+        };
+
+    /// <summary>
     /// 是否为空。多用于判断当前实例是否为 <see cref="AnyValue"/> 的 CLR 默认值。
     /// </summary>
     public bool IsEmpty => StoredTag == Tag.Empty;
 
-    private AnyValue(PrimitiveUnion primitive, Tag tag)
+    private AnyValue(PrimitiveUnion primitive, Tag tag, object? reference = null)
     {
         _primitive = primitive;
-        _reference = null;
+        _reference = reference;
         StoredTag = tag;
     }
 
@@ -211,13 +234,14 @@ public readonly struct AnyValue
     }
 
     /// <summary>
-    /// 创建 <see cref="AnyValue"/>。对基本数据类型走特化路径无装箱；其他值类型会被装箱后存储引用。
+    /// 创建 <see cref="AnyValue"/>。对基本数据类型和枚举类型走特化路径无装箱；其他值类型会被装箱后存储引用。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static AnyValue Of<T>(T value)
     {
         var tag = TagOf<T>();
-        return tag == Tag.Empty ? new AnyValue(value) : Pack(value, tag);
+        if (tag == Tag.Empty) return new AnyValue(value);
+        return tag == Tag.Enum ? Pack(value, Tag.Enum, typeof(T)) : Pack(value, tag);
     }
 
     /// <summary>
@@ -267,8 +291,34 @@ public readonly struct AnyValue
         Int128 v => Pack(v, Tag.Int128),
         UInt128 v => Pack(v, Tag.UInt128),
 #endif
-        _ => new AnyValue(value),
+        _ => OfObjectFallback(value),
     };
+
+    /// <summary>
+    /// <see cref="OfObject"/> 的回退路径：检测装箱后的枚举值并提取其底层整数内联存储，否则按引用存储。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static AnyValue OfObjectFallback(object value)
+    {
+        var type = value.GetType();
+        if (!type.IsEnum) return new AnyValue(value);
+
+        var u = default(PrimitiveUnion);
+        var conv = (IConvertible)value;
+        switch (Type.GetTypeCode(Enum.GetUnderlyingType(type)))
+        {
+            case TypeCode.Byte: u.Byte = conv.ToByte(null); break;
+            case TypeCode.SByte: u.SByte = conv.ToSByte(null); break;
+            case TypeCode.Int16: u.Int16 = conv.ToInt16(null); break;
+            case TypeCode.UInt16: u.UInt16 = conv.ToUInt16(null); break;
+            case TypeCode.Int32: u.Int32 = conv.ToInt32(null); break;
+            case TypeCode.UInt32: u.UInt32 = conv.ToUInt32(null); break;
+            case TypeCode.Int64: u.Int64 = conv.ToInt64(null); break;
+            case TypeCode.UInt64: u.UInt64 = conv.ToUInt64(null); break;
+            default: return new AnyValue(value);
+        }
+        return new AnyValue(u, Tag.Enum, type);
+    }
 
     /// <summary>
     /// 获取指定类型的值。
@@ -297,7 +347,8 @@ public readonly struct AnyValue
                 return true;
             }
         }
-        else if (expected == StoredTag)
+        else if (expected == StoredTag &&
+                 (expected != Tag.Enum || ReferenceEquals(_reference, typeof(T))))
         {
             var u = _primitive;
             result = As<T>(ref u);
