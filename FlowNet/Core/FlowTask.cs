@@ -88,6 +88,7 @@ public interface IFlowTask
 /// <b>NOTE</b>: 设置 <see cref="Flow.EnableTaskInvokingInfo"/> 为 <see langword="true"/>，并使用
 /// <see cref="Flow.InvokingInfoAttribute"/> 标记任务方法的<b>第一个参数</b>以接收调用信息。
 /// </summary>
+/// <param name="Target">调用的任务标识符</param>
 /// <param name="DirectCaller">直接调用者，可能为 <see langword="null"/></param>
 /// <param name="Callers">相关调用者，不存在时为空列表，不包含 <paramref name="DirectCaller"/></param>
 public readonly record struct FlowTaskInvokingInfo(
