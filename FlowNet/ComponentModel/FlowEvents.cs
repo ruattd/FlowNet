@@ -28,7 +28,7 @@ public ref struct FlowPreviewEventArgs<TData>()
     /// <summary>
     /// 事件数据
     /// </summary>
-    public TData Data { get; init; }
+    public required TData Data { get; init; }
 }
 
 public delegate void FlowEventHandler<TData>(ref FlowEventArgs<TData> e);
