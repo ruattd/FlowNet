@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+#if NET5_0_OR_GREATER
+using System.Runtime.InteropServices;
+#endif
 using FlowNet.ComponentModel;
 
 namespace FlowNet.Core;
@@ -106,18 +109,39 @@ file sealed class FlowRunTask : IFlowTask
             return Regex.IsMatch(identifier, $@"\A(?:{pattern})\z");
         }
 
+#if NET5_0_OR_GREATER
+        // 在 .NET 5+ 上将 List<int> 暴露为 Span<int>：免去 List<T>.Enumerator 的 _version 版本校验，
+        // 并允许 JIT 在迭代时消除部分边界检查。CollectionsMarshal 与 Span<T> 在 netstandard2.0 不可用
+        static Span<int> AsView(List<int> list)
+            => CollectionsMarshal.AsSpan(list);
+#else
+        // netstandard2.0 回退为 List<T> 自身，foreach 仍走结构体枚举器，保持语义一致
+        static List<int> AsView(List<int> list) => list;
+#endif
+
         var configs = _AutoRunConfigs
             .Select((config, index) => (config, index))
             .ToArray();
 
-        var duplicateIdentifiers = configs
-            .GroupBy(x => x.config.Identifier)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .Distinct();
-
-        foreach (var duplicateIdentifier in duplicateIdentifiers)
+        // 使用 Dictionary 直接统计标识符出现次数，避免 LINQ GroupBy/Where/Select/Distinct 的多次中间分配与延迟枚举开销
+        var identifierCounts = new Dictionary<string, int>(configs.Length);
+        foreach (var (config, _) in configs)
         {
+#if NET6_0_OR_GREATER
+            // .NET 6+ 提供 GetValueRefOrAddDefault：一次哈希查找即可拿到值槽位的 ref 并自增，
+            // 相比 TryGetValue + 索引器赋值的双查询路径，每次累加减少一次哈希与相等比较
+            ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(identifierCounts, config.Identifier, out _);
+            count++;
+#else
+            identifierCounts.TryGetValue(config.Identifier, out var count);
+            identifierCounts[config.Identifier] = count + 1;
+#endif
+        }
+
+        foreach (var pair in identifierCounts)
+        {
+            if (pair.Value <= 1) continue;
+            var duplicateIdentifier = pair.Key;
             foreach (var (config, _) in configs)
             {
                 if (config.Identifier == duplicateIdentifier) continue;
@@ -129,11 +153,12 @@ file sealed class FlowRunTask : IFlowTask
         var matchedBefore = new List<int>[configs.Length];
         var matchedAfter = new List<int>[configs.Length];
         var incomingAfter = new List<int>[configs.Length];
+        // 给邻接表预设初始容量，避免从 0 反复扩容（List<T>(int) 在 netstandard2.0 与 net5.0 均可用）
         for (var i = 0; i < configs.Length; i++)
         {
-            matchedBefore[i] = [];
-            matchedAfter[i] = [];
-            incomingAfter[i] = [];
+            matchedBefore[i] = new List<int>(4);
+            matchedAfter[i] = new List<int>(4);
+            incomingAfter[i] = new List<int>(4);
         }
 
         for (var i = 0; i < configs.Length; i++)
@@ -153,7 +178,8 @@ file sealed class FlowRunTask : IFlowTask
         }
 
         var included = new bool[configs.Length];
-        var includeQueue = new Queue<int>();
+        // 预设 Queue 容量上限，避免多次扩容（最坏情况入队所有节点）
+        var includeQueue = new Queue<int>(configs.Length);
 
         void Include(int index)
         {
@@ -171,24 +197,34 @@ file sealed class FlowRunTask : IFlowTask
         while (includeQueue.Count > 0)
         {
             var node = includeQueue.Dequeue();
-            foreach (var target in matchedAfter[node]) Include(target);
-            foreach (var target in matchedBefore[node]) Include(target);
+            // 热点遍历：通过 AsView 在 .NET 5+ 上获得 Span 路径
+            foreach (var target in AsView(matchedAfter[node])) Include(target);
+            foreach (var target in AsView(matchedBefore[node])) Include(target);
         }
 
         var edges = new HashSet<int>[configs.Length];
-        for (var i = 0; i < configs.Length; i++) edges[i] = [];
+        for (var i = 0; i < configs.Length; i++)
+        {
+#if NET5_0_OR_GREATER
+            // HashSet<T>(int capacity) 构造函数在 netstandard2.0 中不存在，仅 .NET 5+ 提供，用它避免后续 Add 多次 rehash
+            edges[i] = new HashSet<int>(4);
+#else
+            edges[i] = [];
+#endif
+        }
 
         for (var i = 0; i < configs.Length; i++)
         {
             if (!included[i]) continue;
 
-            foreach (var target in matchedAfter[i])
+            // 热点遍历：通过 AsView 在 .NET 5+ 上获得 Span 路径
+            foreach (var target in AsView(matchedAfter[i]))
             {
                 if (included[target])
                     edges[target].Add(i);
             }
 
-            foreach (var target in matchedBefore[i])
+            foreach (var target in AsView(matchedBefore[i]))
             {
                 if (included[target])
                     edges[i].Add(target);
@@ -207,7 +243,7 @@ file sealed class FlowRunTask : IFlowTask
         }
 
         var levels = new int[configs.Length];
-        var queue = new Queue<int>();
+        var queue = new Queue<int>(configs.Length);
         for (var i = 0; i < configs.Length; i++)
         {
             if (included[i] && indegree[i] == 0)
@@ -229,28 +265,59 @@ file sealed class FlowRunTask : IFlowTask
             }
         }
 
-        var includedCount = included.Count(x => x);
+        // 直接循环统计 included 数量，避免 LINQ Count(x => x) 的委托与枚举器分配
+        var includedCount = 0;
+        foreach (var t in included) if (t) includedCount++;
         if (visitedCount != includedCount)
             throw new InvalidOperationException("Circular auto-run dependency detected.");
 
-        var runMap = levels
-            .Select((level, index) => (level, index))
-            .Where(x => included[x.index])
-            .GroupBy(x => x.level)
-            .OrderBy(g => g.Key)
-            .Select(g => (IReadOnlyList<(string, IReadOnlyCollection<string>)>)g
-                .OrderBy(x => configs[x.index].config.Priority)
-                .ThenBy(x => x.index)
-                .Select(x =>
-                {
-                    var callers = new HashSet<string>();
-                    foreach (var target in matchedBefore[x.index]) callers.Add(configs[target].config.Identifier);
-                    foreach (var target in matchedAfter[x.index]) callers.Add(configs[target].config.Identifier);
-                    foreach (var source in incomingAfter[x.index]) callers.Add(configs[source].config.Identifier);
-                    return (configs[x.index].config.Identifier, (IReadOnlyCollection<string>)callers);
-                })
-                .ToArray())
-            .ToList();
+        // 使用按 level 分桶的命令式实现替换 LINQ Select/Where/GroupBy/OrderBy/Select/ToArray 链，
+        // 一次遍历建桶，桶内手动排序，减少中间集合与匿名委托分配
+        var maxLevel = -1;
+        for (var i = 0; i < configs.Length; i++)
+        {
+            if (included[i] && levels[i] > maxLevel)
+                maxLevel = levels[i];
+        }
+
+        var levelBuckets = new List<int>?[maxLevel + 1];
+        for (var i = 0; i < configs.Length; i++)
+        {
+            if (!included[i]) continue;
+            var bucket = levelBuckets[levels[i]] ??= new List<int>(4);
+            bucket.Add(i);
+        }
+
+        var runMap = new List<IReadOnlyList<(string, IReadOnlyCollection<string>)>>(maxLevel + 1);
+        for (var level = 0; level <= maxLevel; level++)
+        {
+            var bucket = levelBuckets[level];
+            if (bucket == null) continue;
+
+            // 同级按 priority 升序排序，相同 priority 按原 index 维持稳定顺序
+            bucket.Sort((a, b) =>
+            {
+                var cmp = configs[a].config.Priority.CompareTo(configs[b].config.Priority);
+                return cmp != 0 ? cmp : a.CompareTo(b);
+            });
+
+            var section = new (string, IReadOnlyCollection<string>)[bucket.Count];
+            for (var k = 0; k < bucket.Count; k++)
+            {
+                var idx = bucket[k];
+#if NET5_0_OR_GREATER
+                // HashSet<T>(int capacity) 仅在 .NET 5+ 可用，按已知元素数量上限预分配，避免多次 rehash
+                var callers = new HashSet<string>(matchedBefore[idx].Count + matchedAfter[idx].Count + incomingAfter[idx].Count);
+#else
+                var callers = new HashSet<string>();
+#endif
+                foreach (var target in AsView(matchedBefore[idx])) callers.Add(configs[target].config.Identifier);
+                foreach (var target in AsView(matchedAfter[idx])) callers.Add(configs[target].config.Identifier);
+                foreach (var source in AsView(incomingAfter[idx])) callers.Add(configs[source].config.Identifier);
+                section[k] = (configs[idx].config.Identifier, callers);
+            }
+            runMap.Add(section);
+        }
 
         _AutoRunMap = runMap;
     }

@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
+        <TargetFrameworks>netstandard2.0;net5.0;net6.0;net7.0</TargetFrameworks>
         <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -27,6 +27,10 @@
         <None Include="..\FlowNet.CodeAnalysis\bin\$(Configuration)\netstandard2.0\FlowNet.CodeAnalysis.dll"
               Pack="true" PackagePath="/analyzers/dotnet/cs" Visible="false" />
         <None Include="..\README.md" Pack="true" PackagePath="/"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+        <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
     </ItemGroup>
 
 </Project>

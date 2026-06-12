@@ -32,7 +32,7 @@ jobs:
         run: |
           VERSION=${{ inputs.version }}
           VERSION=${VERSION#v}
-          dotnet publish -c ${{ inputs.config }} ${VERSION:+-p:Version=$VERSION}
+          dotnet build -c ${{ inputs.config }} ${VERSION:+-p:Version=$VERSION}
 
       - name: "Upload Artifact (.nupkg)"
         uses: actions/upload-artifact@v7.0.1
