@@ -86,20 +86,20 @@ partial class Flow
         /// <summary>
         /// 调用既无参数也无返回值的 Flow 任务，详情参考 <see cref="InvokeTask{TReturn, TArgument}(string, TArgument)"/>。
         /// </summary>
-        public Task InvokeTask(string identifier)
-            => context.InvokeTask<None, None>(identifier, default);
+        public Task InvokeTask(string identifier, bool forceGlobal = false)
+            => context.InvokeTask<None, None>(identifier, default, forceGlobal);
 
         /// <summary>
         /// 调用无参数的 Flow 任务，详情参考 <see cref="InvokeTask{TReturn, TArgument}(string, TArgument)"/>。
         /// </summary>
-        public Task<TReturn> InvokeTask<TReturn>(string identifier)
-            => context.InvokeTask<TReturn, None>(identifier, default);
+        public Task<TReturn> InvokeTask<TReturn>(string identifier, bool forceGlobal = false)
+            => context.InvokeTask<TReturn, None>(identifier, default, forceGlobal);
 
         /// <summary>
         /// 调用无返回值的 Flow 任务，详情参考 <see cref="InvokeTask{TReturn, TArgument}(string, TArgument)"/>。
         /// </summary>
-        public Task InvokeTask<TArgument>(string identifier, TArgument argument)
-            => context.InvokeTask<None, TArgument>(identifier, argument);
+        public Task InvokeTask<TArgument>(string identifier, TArgument argument, bool forceGlobal = false)
+            => context.InvokeTask<None, TArgument>(identifier, argument, forceGlobal);
 
         /// <summary>
         /// 调用 Flow 任务，传入参数并获取返回值。<br/>
@@ -107,21 +107,25 @@ partial class Flow
         /// 时，使用该方法及其变体调用任务会产生包含调用方和目标标识符的调用信息。
         /// <b>NOTE</b>: 没有返回值或没有参数时用默认的 <see cref="None"/> 类型替代。
         /// </summary>
-        /// <param name="identifier">任务标识符，可传入相对于当前作用域的短标识符，或包含作用域前缀的完整标识符</param>
+        /// <param name="identifier">任务标识符，可传入相对于当前作用域的短标识符，或包含作用域前缀的全局标识符</param>
         /// <param name="argument">任务参数，若大于一个，则该值应传入 <see cref="ValueTuple"/></param>
+        /// <param name="forceGlobal">强制将 <paramref name="identifier"/> 视为全局标识符</param>
         /// <typeparam name="TReturn">返回值类型</typeparam>
         /// <typeparam name="TArgument">参数类型</typeparam>
         /// <returns>任务返回值</returns>
         /// <exception cref="KeyNotFoundException">不存在指定全局标识的任务</exception>
-        public Task<TReturn> InvokeTask<TReturn, TArgument>(string identifier, TArgument argument)
+        public Task<TReturn> InvokeTask<TReturn, TArgument>(string identifier, TArgument argument, bool forceGlobal = false)
         {
-            var globalIdentifier = $"{context.Identifier}:{identifier}";
-            if (!ExistsTask(globalIdentifier)) globalIdentifier = identifier;
+            if (!forceGlobal)
+            {
+                var globalIdentifier = $"{context.Identifier}:{identifier}";
+                if (ExistsTask(globalIdentifier)) identifier = globalIdentifier;
+            }
             var invokingInfo = EnableTaskInvokingInfo ? new FlowTaskInvokingInfo {
                 DirectCaller = context.Identifier,
-                Target = globalIdentifier,
+                Target = identifier,
             } : default;
-            return Internal.InvokeTask<TReturn, TArgument>(globalIdentifier, argument, invokingInfo);
+            return Internal.InvokeTask<TReturn, TArgument>(identifier, argument, invokingInfo);
         }
     }
 }
